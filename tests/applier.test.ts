@@ -1,0 +1,179 @@
+import { describe, expect, it } from 'vitest';
+import { applyCommands } from '../src/applier.js';
+import { DungeonSchema } from '../src/schema.js';
+import type { Command, CommandType } from '../src/types.js';
+
+const cmd = (type: CommandType, path: string, args: unknown[] = [], reason = ''): Command => ({
+  type,
+  path,
+  args,
+  reason,
+  raw: '',
+});
+
+const base = () =>
+  DungeonSchema.parse({
+    player: { hp: { cur: 8, max: 10 } },
+    light: { source: 'torch', ticks_remaining: 5 },
+    inventory: [
+      { id: 'torch', name: 'Torch', qty: 2 },
+      { id: 'key', name: 'Rusty Key', qty: 1 },
+    ],
+    rooms: {
+      R01: { id: 'R01', name: 'Entry', exits: { north: { to: 'R02', type: 'door', state: 'locked' } } },
+      R02: { id: 'R02', name: 'Hall' },
+    },
+  });
+
+describe('applyCommands — purity & bookkeeping', () => {
+  it('never mutates its input', () => {
+    const input = base();
+    const snapshot = structuredClone(input);
+    applyCommands(input, [cmd('set', 'player.hp.cur', [8, 1]), cmd('unset', 'rooms.R01')]);
+    expect(input).toEqual(snapshot);
+  });
+
+  it('clears delta_log at the start of the turn by default', () => {
+    const d = DungeonSchema.parse({ delta_log: ['stale'], player: { hp: { cur: 8, max: 10 } } });
+    const r = applyCommands(d, [cmd('add', 'player.hp.cur', [-1])]);
+    expect(r.delta_log).not.toContain('stale');
+    const kept = applyCommands(d, [cmd('add', 'player.hp.cur', [-1])], { clearDeltaLog: false });
+    expect(kept.delta_log).toContain('stale');
+  });
+
+  it('routes blocked/desync notes to the injected warn callback', () => {
+    const warns: string[] = [];
+    applyCommands(base(), [cmd('unset', 'rooms.R01'), cmd('set', 'player.hp.cur', [999, 1])], {
+      warn: m => warns.push(m),
+    });
+    expect(warns.some(w => w.startsWith('[BLOCKED]'))).toBe(true);
+    expect(warns.some(w => w.startsWith('[DESYNC]'))).toBe(true);
+  });
+});
+
+describe('invariant 4 — old-value confirmation', () => {
+  it('applies a set whose claimed old value matches, no desync', () => {
+    const r = applyCommands(base(), [cmd('set', 'player.hp.cur', [8, 5], 'hit')]);
+    expect(r.dungeon.player.hp.cur).toBe(5);
+    expect(r.desync).toHaveLength(0);
+    expect(r.delta_log.some(l => l.includes('player.hp.cur'))).toBe(true);
+  });
+
+  it('flags desync on mismatch but still applies the new value', () => {
+    const r = applyCommands(base(), [cmd('set', 'player.hp.cur', [3, 5])]);
+    expect(r.dungeon.player.hp.cur).toBe(5);
+    expect(r.desync).toHaveLength(1);
+  });
+});
+
+describe('invariant 3 — numeric bounds', () => {
+  it('clamps hp.cur to [0, max] via add', () => {
+    expect(applyCommands(base(), [cmd('add', 'player.hp.cur', [-100])]).dungeon.player.hp.cur).toBe(0);
+  });
+  it('clamps hp.cur to max via set', () => {
+    expect(applyCommands(base(), [cmd('set', 'player.hp.cur', [8, 999])]).dungeon.player.hp.cur).toBe(10);
+  });
+  it('clamps combat mob hp_cur', () => {
+    const d = DungeonSchema.parse({
+      combat: { active: true, mobs: [{ id: 'm1', type: 'rat', name: 'Rat', hp_cur: 5, hp_max: 6 }] },
+    });
+    const r = applyCommands(d, [cmd('add', 'combat.mobs[0].hp_cur', [-99])]);
+    expect(r.dungeon.combat.mobs[0].hp_cur).toBe(0);
+  });
+  it('blocks add on a non-numeric target', () => {
+    expect(applyCommands(base(), [cmd('add', 'player.name', [1])]).blocked).toHaveLength(1);
+  });
+});
+
+describe('invariant 1 — topology lock', () => {
+  it('adds a new exit and auto-writes the reciprocal edge', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.east', [null, { to: 'R02', type: 'open' }])]);
+    expect(r.blocked).toHaveLength(0);
+    expect(r.dungeon.rooms.R01.exits.east).toMatchObject({ to: 'R02', type: 'open' });
+    expect(r.dungeon.rooms.R02.exits.west).toMatchObject({ to: 'R01', type: 'open' });
+  });
+
+  it('mirrors stairs type on the reciprocal edge', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.down', [null, { to: 'R02', type: 'stairs_down' }])]);
+    expect(r.dungeon.rooms.R02.exits.up).toMatchObject({ to: 'R01', type: 'stairs_up' });
+  });
+
+  it('does not auto-link when the target room does not exist yet', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.east', [null, { to: 'R99', type: 'open' }])]);
+    expect(r.dungeon.rooms.R99).toBeUndefined();
+    expect(r.dungeon.rooms.R01.exits.east).toBeDefined();
+  });
+
+  it('blocks redirecting/replacing an existing exit', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.north', [null, { to: 'R03', type: 'open' }])]);
+    expect(r.blocked).toHaveLength(1);
+    expect(r.dungeon.rooms.R01.exits.north.to).toBe('R02');
+  });
+
+  it('blocks editing exit.to and exit.type, allows exit.state', () => {
+    expect(applyCommands(base(), [cmd('set', 'rooms.R01.exits.north.to', ['R02', 'R09'])]).blocked).toHaveLength(1);
+    expect(applyCommands(base(), [cmd('set', 'rooms.R01.exits.north.type', ['door', 'open'])]).blocked).toHaveLength(1);
+    const ok = applyCommands(base(), [cmd('set', 'rooms.R01.exits.north.state', ['locked', 'open'], 'picked')]);
+    expect(ok.blocked).toHaveLength(0);
+    expect(ok.dungeon.rooms.R01.exits.north.state).toBe('open');
+  });
+
+  it('blocks deleting an exit', () => {
+    expect(applyCommands(base(), [cmd('unset', 'rooms.R01.exits.north')]).blocked).toHaveLength(1);
+    expect(applyCommands(base(), [cmd('delete', 'rooms.R01.exits.north')]).blocked).toHaveLength(1);
+  });
+});
+
+describe('invariant 5 — append-only rooms & bestiary', () => {
+  it('blocks mutating an immutable field of an existing room', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.name', ['Entry', 'Foyer'])]);
+    expect(r.blocked).toHaveLength(1);
+    expect(r.dungeon.rooms.R01.name).toBe('Entry');
+  });
+  it('allows whitelisted room subfields (visited, contents)', () => {
+    expect(applyCommands(base(), [cmd('set', 'rooms.R01.visited', [true, true])]).blocked).toHaveLength(0);
+    expect(
+      applyCommands(base(), [cmd('insert', 'rooms.R01.contents', [{ id: 'gem', name: 'Gem', kind: 'item' }])]).dungeon
+        .rooms.R01.contents,
+    ).toHaveLength(1);
+  });
+  it('allows appending a new room, blocks deleting one', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R03', [null, { id: 'R03', name: 'Crypt' }])]);
+    expect(r.blocked).toHaveLength(0);
+    expect(r.dungeon.rooms.R03.name).toBe('Crypt');
+    expect(applyCommands(base(), [cmd('unset', 'rooms.R01')]).blocked).toHaveLength(1);
+  });
+  it('enforces bestiary immutability but allows new entries', () => {
+    const d = DungeonSchema.parse({ bestiary: { drowned: { sprite_fragment: 'x', hp_base: 8, defense: 11 } } });
+    expect(applyCommands(d, [cmd('set', 'bestiary.drowned.hp_base', [8, 99])]).blocked).toHaveLength(1);
+    expect(
+      applyCommands(d, [cmd('set', 'bestiary.rat', [null, { sprite_fragment: 'y', hp_base: 3, defense: 9 }])]).blocked,
+    ).toHaveLength(0);
+  });
+});
+
+describe('invariant 2 — inventory legality', () => {
+  it('decrements a stack and splices when it hits zero', () => {
+    const r1 = applyCommands(base(), [cmd('remove', 'inventory', ['torch'], 'burned one')]);
+    expect(r1.dungeon.inventory.find(i => i.id === 'torch')?.qty).toBe(1);
+    const r2 = applyCommands(base(), [cmd('remove', 'inventory', ['key'])]);
+    expect(r2.dungeon.inventory.find(i => i.id === 'key')).toBeUndefined();
+  });
+  it('blocks removing an item that is not present', () => {
+    expect(applyCommands(base(), [cmd('remove', 'inventory', ['sword'])]).blocked).toHaveLength(1);
+  });
+  it('blocks removing more than the held quantity', () => {
+    expect(applyCommands(base(), [cmd('remove', 'inventory', ['key', 5])]).blocked).toHaveLength(1);
+  });
+});
+
+describe('other verbs', () => {
+  it('unsets a non-protected path', () => {
+    const r = applyCommands(base(), [cmd('unset', 'light', [], 'lantern died')]);
+    expect(r.dungeon.light).toBeUndefined();
+    expect(r.blocked).toHaveLength(0);
+  });
+  it('blocks unsupported move', () => {
+    expect(applyCommands(base(), [cmd('move', 'inventory', ['a', 'b'])]).blocked).toHaveLength(1);
+  });
+});

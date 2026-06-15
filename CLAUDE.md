@@ -128,3 +128,20 @@ kills drift) → **M4** preset surgery (full-ledger → `<UpdateDungeon>` mutati
 **M5** rewind safety (message-scope snapshots) → **M6** SVG map render → **M7** sprite
 seed-locking. Prove linear-play state persistence (through M3) before rewind, combat math, or
 the TTRPG depth layer (§13).
+
+### Status & module map
+
+- **M1 done** — `src/schema.ts` (`DungeonSchema`, `emptyDungeon`, `ROOT_KEY`).
+- **M2 done** — `src/parser.ts` (`extractCommands`), `src/types.ts` (`Command`).
+- **M3 done** — `src/applier.ts` (`applyCommands`, pure) + `src/store.ts`
+  (`processMessage`, `makeStore`, behind an injectable `VariableStore`).
+- **Next: M4** — fork the preset to emit `<UpdateDungeon>` mutations instead of the full
+  ledger, and add the compact state-injection block (design §6). Then **M5** rewind safety.
+
+The applier is the pure core: `applyCommands(dungeon, commands)` deep-clones its input,
+enforces the five §5 invariants, and returns `{ dungeon, delta_log, blocked, desync }`.
+Blocked invariants and old-value desyncs are pushed to `delta_log` (prefixed `[BLOCKED]` /
+`[DESYNC]`) and to an injectable `warn` logger; the tree is never corrupted and nothing throws.
+Runtime glue (event hooks reading/writing chat-scope vars) builds a `VariableStore` from
+`getVariables`/`replaceVariables` and calls `processMessage` — see the snippet at the top of
+`src/store.ts`. `move` is parsed but intentionally blocked at apply time (underspecified).

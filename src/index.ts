@@ -5,3 +5,5 @@
 export * from './types.js';
 export * from './parser.js';
 export * from './schema.js';
+export * from './applier.js';
+export * from './store.js';
