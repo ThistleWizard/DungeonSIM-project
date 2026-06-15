@@ -1,0 +1,24 @@
+{
+  "name": "dungeonstate",
+  "version": "0.1.0",
+  "description": "Deterministic, schema-validated state layer for DungeonSIM, built on SillyTavern's Tavern Helper.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\""
+  },
+  "dependencies": {
+    "json5": "^2.2.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.6"
+  }
+}

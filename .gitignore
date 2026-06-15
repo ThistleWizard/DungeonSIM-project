@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+
+# Vendored reference copy of Tavern Helper (re-extractable; reference only, not our code)
+JS-Slash-Runner-main/
+JS-Slash-Runner-main.zip
