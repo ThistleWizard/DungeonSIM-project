@@ -135,8 +135,21 @@ the TTRPG depth layer (§13).
 - **M2 done** — `src/parser.ts` (`extractCommands`), `src/types.ts` (`Command`).
 - **M3 done** — `src/applier.ts` (`applyCommands`, pure) + `src/store.ts`
   (`processMessage`, `makeStore`, behind an injectable `VariableStore`).
-- **Next: M4** — fork the preset to emit `<UpdateDungeon>` mutations instead of the full
-  ledger, and add the compact state-injection block (design §6). Then **M5** rewind safety.
+- **M4 done** — `src/inject.ts` (`formatStateBlock`, the thinned §6 block) +
+  `renderInjection` in store.ts. Preset forked to `DungeonSIM-Phase2.json` (v0.2.0) via
+  `tools/build-phase2-preset.py` (non-destructive; Phase 1 `DungeonSIM.json` untouched):
+  the ledger prompt became `<mutation_protocol>` (`<UpdateDungeon>` grammar), the CoT
+  reads `[CURRENT STATE]` and emits mutations, chargen seeds via `_.assign`/`_.insert`.
+- **Next: M5** — rewind safety (message-scope snapshots + restore-on-swipe, design §7).
+
+### The preset fork
+
+`DungeonSIM-Phase2.json` is generated, never hand-edited — change the prompt strings in
+`tools/build-phase2-preset.py` and re-run `python tools/build-phase2-preset.py`. The script
+asserts each anchor is unique and that no Phase-1 emission text survives. Mutation-command
+paths in the preset are written relative to the dungeon root (no `dungeon.` prefix), matching
+the applier. The preset *requires* the script: it references a `{{dungeon_state}}` injection
+the runtime supplies via `renderInjection`.
 
 The applier is the pure core: `applyCommands(dungeon, commands)` deep-clones its input,
 enforces the five §5 invariants, and returns `{ dungeon, delta_log, blocked, desync }`.

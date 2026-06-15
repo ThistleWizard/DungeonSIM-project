@@ -13,8 +13,14 @@
  *   );
  *   eventOn(tavern_events.GENERATION_ENDED, () =>
  *     processMessage(store, getLastMessageText(), { warn: console.warn }));
+ *
+ * And the §6 injection (preset references it as {{dungeon_state}}):
+ *
+ *   registerMacroLike(/{{dungeon_state}}/g, () => renderInjection(store));
+ *   // or inject at low depth on GENERATION_STARTED via Tavern Helper's inject API.
  */
 import { applyCommands, type ApplyOptions, type ApplyResult } from './applier.js';
+import { formatStateBlock } from './inject.js';
 import { extractCommands } from './parser.js';
 import { type Dungeon, DungeonSchema, ROOT_KEY, emptyDungeon } from './schema.js';
 
@@ -50,4 +56,9 @@ export function processMessage(store: VariableStore, message: string, opts: Appl
   vars[ROOT_KEY] = result.dungeon;
   store.write(vars);
   return result;
+}
+
+/** Render the compact [CURRENT STATE] block for prompt injection (design §6). */
+export function renderInjection(store: VariableStore): string {
+  return formatStateBlock(loadDungeon(store.read() ?? {}));
 }
