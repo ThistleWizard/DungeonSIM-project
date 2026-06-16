@@ -13,7 +13,11 @@ describe('extractCommands (extract-commands.spec.md)', () => {
 
   it('R2 — multiple commands in source order', () => {
     const cmds = extractCommands(
-      block("_.set('player.hp.cur', 5, 2);//hit", "_.add('player.skills.arcana.marks', 1);//mark", "_.remove('inventory', 'torch_1');//out"),
+      block(
+        "_.set('player.hp.cur', 5, 2);//hit",
+        "_.add('player.skills.arcana.marks', 1);//mark",
+        "_.remove('inventory', 'torch_1');//out",
+      ),
     );
     expect(cmds.map(c => c.type)).toEqual(['set', 'add', 'remove']);
     expect(cmds.map(c => c.path)).toEqual(['player.hp.cur', 'player.skills.arcana.marks', 'inventory']);

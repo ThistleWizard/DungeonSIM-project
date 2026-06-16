@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommands } from '../src/applier.js';
-import { DungeonSchema } from '../src/schema.js';
+import { DungeonSchema, emptyDungeon } from '../src/schema.js';
 import type { Command, CommandType } from '../src/types.js';
 
 const cmd = (type: CommandType, path: string, args: unknown[] = [], reason = ''): Command => ({
@@ -82,6 +82,20 @@ describe('invariant 3 — numeric bounds', () => {
   });
   it('blocks add on a non-numeric target', () => {
     expect(applyCommands(base(), [cmd('add', 'player.name', [1])]).blocked).toHaveLength(1);
+  });
+  it('initialises a missing numeric path to 0 (first use-based mark)', () => {
+    const r = applyCommands(emptyDungeon(), [cmd('add', 'player.skills.lockpicking.marks', [1], 'first use')]);
+    expect(r.blocked).toHaveLength(0);
+    expect(r.dungeon.player.skills.lockpicking.marks).toBe(1);
+  });
+  it('clamps mob hp_cur to 0 on overkill via set, and via add', () => {
+    const base = emptyDungeon();
+    base.combat.active = true;
+    base.combat.mobs = [{ id: 'm1', type: 'x', name: 'x', hp_cur: 8, hp_max: 8, status: '', pos: 'near' }] as any;
+    const overkill = applyCommands(base, [cmd('set', 'combat.mobs.0.hp_cur', [8, -3], 'overkill')]);
+    expect(overkill.dungeon.combat.mobs[0].hp_cur).toBe(0);
+    const hit = applyCommands(base, [cmd('add', 'combat.mobs.0.hp_cur', [-5], 'hit')]);
+    expect(hit.dungeon.combat.mobs[0].hp_cur).toBe(3);
   });
 });
 

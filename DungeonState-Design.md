@@ -271,3 +271,29 @@ If you also pull MVU **for design reference only** (do not install/run):
 So this layer is the natural first thing to author against the schema — almost a justification for building it. Enumerate only what touches persisted mechanics; adjudicate the rest.
 
 **Schema impact when built:** add `effects: z.array(z.object({name, ticks: z.number().nullable()})).default([])` to `RoomSchema`; no other structural change (conditions and mob status already exist).
+
+---
+
+## 14. Gold Box panel display (M8, speculative — later design goal)
+
+*Captured as a long-term visual target. Clearly SUBSEQUENT to M4 patches, M5 rewind, and M6 map render. Not started until those are solid. Feasibility is high BECAUSE the state engine already holds everything as structured data — every panel is a pure render of a slice of the tree.*
+
+**The target:** the classic SSI Gold Box four-zone screen (Pool of Radiance / Champions of Krynn lineage): all live at once instead of a single scrolling column.
+- **Viewport panel** — current mob / scene 8-bit sprite. Reads the current encounter's `bestiary[type].sprite_fragment` (+ M7 seed for the actual image).
+- **Text panel** — scrolling narration + combat log. This is ST's chat surface.
+- **Sheet panel** — character sheet. Reads `dungeon.player` (hp, stats, skills, conditions, level).
+- **Map panel** — automap. Reads `dungeon.rooms` (the graph). This IS the M6 SVG render, placed in a quadrant.
+
+**Feasibility:** the data is already there — this is the payoff of decoupling state from prose. `formatStateBlock` (inject.ts) is already a state→text serializer; the panels are the same idea rendering to HTML/SVG boxes. Tavern Helper can manage DOM. Elaborate display mods for ST exist, so the platform supports it.
+
+**Two build paths (decide at M8, not now):**
+1. *In-ST overlay (recommended first version)* — inject a styled, CSS-quadrant container that reshapes/overlays the chat area; panels populated by the extension from chat-scope vars. Keeps everything in one tool. Cost: perpetually fighting ST's chat-centric CSS; ST updates can break the layout.
+2. *External display (fallback / honest decoupling)* — a lightweight page served off the Pi reads the same state tree and renders the full layout properly; ST runs alongside as input/text. More moving parts, no CSS wrestling, survives ST updates. Viable precisely because state is no longer trapped in the chat client.
+
+**Build principle — modular panels for portability.** Implement as components that each take a state slice and render: `renderSheet(player)`, `renderMap(rooms)`, `renderSprite(mob)`, etc. Then the SAME components work in either host — if the in-ST overlay fights too hard, lift them into an external page without a rewrite. Build path 1 first to prove the panels render correctly from the store (the real value); keep the option on path 2.
+
+**TOGGLEABLE — hard requirement.** Must be a switch, defaulting OFF / to plain chat. Rationale: Paul plays on mobile often, where a four-quadrant layout is unreadable. The panel display is a desktop immersion feature; mobile and small screens fall back to the normal single-column chat (the game must remain fully playable as plain text — the panels are a VIEW, never a requirement). A simple settings toggle (and/or auto-disable below a viewport-width breakpoint) gates the whole overlay.
+
+**Dependency on M5 (important):** a live panel UI reading chat-scope state will display INCORRECTLY on swipe/rewind unless M5's message-scope snapshot consistency is solid — map/sheet would show post-turn state while the text shows the rewound turn. The pretty display therefore RAISES the stakes on getting rewind right. Do not build M8 until M5 is correct and tested.
+
+**Sequence:** M4 patches → M5 rewind → M6 map render (feeds the map panel) → M7 sprite seeds (feeds the viewport panel) → M8 panel display assembles the four zones. M8 is largely a CSS/layout + component-wiring project once M6/M7 exist; almost no new state work.

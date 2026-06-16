@@ -34,13 +34,23 @@ export function makeStore(read: () => Record<string, any>, write: (vars: Record<
 }
 
 /** Load and normalise the dungeon subtree from a raw variables object. */
-export function loadDungeon(vars: Record<string, any>): Dungeon {
+export function loadDungeon(vars: Record<string, any>, warn?: (m: string) => void): Dungeon {
   const raw = vars?.[ROOT_KEY];
   if (raw === undefined || raw === null) return emptyDungeon();
   const parsed = DungeonSchema.safeParse(raw);
   // Best-effort: if stored state is currently invalid, keep it rather than wipe a
-  // run; the applier tolerates it and the next valid turn re-normalises.
-  return parsed.success ? parsed.data : (raw as Dungeon);
+  // run; the applier tolerates it and the next valid turn re-normalises. But log
+  // it — silent validation loss is also the migration trigger (see §13 / patch §4).
+  if (!parsed.success) {
+    warn?.(
+      `[DungeonState] stored state failed schema validation (kept as-is): ${parsed.error.issues
+        .slice(0, 3)
+        .map(i => i.path.join('.') + ': ' + i.message)
+        .join('; ')}`,
+    );
+    return raw as Dungeon;
+  }
+  return parsed.data;
 }
 
 /**
@@ -50,8 +60,14 @@ export function loadDungeon(vars: Record<string, any>): Dungeon {
  */
 export function processMessage(store: VariableStore, message: string, opts: ApplyOptions = {}): ApplyResult {
   const vars = store.read() ?? {};
-  const current = loadDungeon(vars);
+  const current = loadDungeon(vars, opts.warn);
   const commands = extractCommands(message);
+  if (commands.length === 0) {
+    // No <UpdateDungeon> block this turn (pure dialogue / OOC): do not clear the
+    // delta_log or rewrite. A no-op must preserve the previous turn's change list
+    // so lazy consumers (map render, "what changed") can still read it.
+    return { dungeon: current, delta_log: current.delta_log ?? [], blocked: [], desync: [] };
+  }
   const result = applyCommands(current, commands, opts);
   vars[ROOT_KEY] = result.dungeon;
   store.write(vars);
@@ -59,6 +75,6 @@ export function processMessage(store: VariableStore, message: string, opts: Appl
 }
 
 /** Render the compact [CURRENT STATE] block for prompt injection (design §6). */
-export function renderInjection(store: VariableStore): string {
-  return formatStateBlock(loadDungeon(store.read() ?? {}));
+export function renderInjection(store: VariableStore, warn?: (m: string) => void): string {
+  return formatStateBlock(loadDungeon(store.read() ?? {}, warn));
 }

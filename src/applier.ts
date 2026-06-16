@@ -224,10 +224,14 @@ function applyAdd(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const guard = guardWrite(d, path, undefined, 'write');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
   const stored = _.get(d, path);
-  if (typeof stored !== 'number') return ctx.block(cmd, `add target '${path}' is not a number (${fmt(stored)})`);
-  const finalV = clampForPath(d, path, stored + delta);
+  // Use-based growth starts from rank 0: a missing path is the first mark, so
+  // treat undefined as 0 and let the delta initialise it. A stored value that
+  // EXISTS but is non-numeric is a real type error — still block that.
+  const baseVal = stored === undefined ? 0 : stored;
+  if (typeof baseVal !== 'number') return ctx.block(cmd, `add target '${path}' is not a number (${fmt(stored)})`);
+  const finalV = clampForPath(d, path, baseVal + delta);
   _.set(d, path, finalV);
-  ctx.log(`${path}: ${stored} -> ${finalV}${reasonSuffix(cmd)}`);
+  ctx.log(`${path}: ${baseVal} -> ${finalV}${reasonSuffix(cmd)}`);
 }
 
 function applyRemove(d: Dungeon, cmd: Command, ctx: Ctx): void {

@@ -46,6 +46,25 @@ describe('processMessage — full per-turn pipeline', () => {
     expect(result.dungeon.meta.schema_version).toBe('2.0');
     expect(result.dungeon.player.location).toBe('R01');
   });
+
+  it('a no-op turn (no UpdateDungeon block) preserves the prior delta_log and does not write', () => {
+    let writes = 0;
+    let vars: Record<string, any> = {
+      dungeon: DungeonSchema.parse({ delta_log: ['prior change'], player: { hp: { cur: 8, max: 10 } } }),
+    };
+    const store = makeStore(
+      () => vars,
+      v => {
+        writes++;
+        vars = v;
+      },
+    );
+    const r = processMessage(store, 'Just narration, no update block.');
+    expect(loadDungeon(vars).delta_log[0]).toBe('prior change');
+    expect(r.delta_log[0]).toBe('prior change');
+    expect(r.blocked).toHaveLength(0);
+    expect(writes).toBe(0);
+  });
 });
 
 describe('loadDungeon', () => {
@@ -55,5 +74,11 @@ describe('loadDungeon', () => {
   it('round-trips a valid stored tree', () => {
     const stored = DungeonSchema.parse({ meta: { turn: 7 } });
     expect(loadDungeon({ dungeon: stored }).meta.turn).toBe(7);
+  });
+  it('warns (but keeps the raw value) when stored state fails schema validation', () => {
+    const warns: string[] = [];
+    const broken = loadDungeon({ dungeon: { meta: { turn: 'not-a-number' } } }, m => warns.push(m));
+    expect(warns.some(w => w.startsWith('[DungeonState]'))).toBe(true);
+    expect((broken as any).meta.turn).toBe('not-a-number');
   });
 });
