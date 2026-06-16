@@ -53,6 +53,22 @@ export function loadDungeon(vars: Record<string, any>, warn?: (m: string) => voi
   return parsed.data;
 }
 
+/** Read and normalise the current dungeon from chat scope. */
+export function readDungeon(store: VariableStore, warn?: (m: string) => void): Dungeon {
+  return loadDungeon(store.read() ?? {}, warn);
+}
+
+/**
+ * Restore a dungeon tree into chat scope, replacing ONLY our `ROOT_KEY` subtree and
+ * preserving any other extensions' chat-scope variables. Used by M5 rewind to snap
+ * canonical state back to a message's snapshot.
+ */
+export function writeDungeon(store: VariableStore, dungeon: Dungeon): void {
+  const vars = store.read() ?? {};
+  vars[ROOT_KEY] = dungeon;
+  store.write(vars);
+}
+
 /**
  * Full per-turn pipeline. Reads variables from the store, applies the mutations
  * found in `message`, persists the result back under the `dungeon` key, and

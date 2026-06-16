@@ -140,7 +140,22 @@ the TTRPG depth layer (§13).
   `tools/build-phase2-preset.py` (non-destructive; Phase 1 `DungeonSIM.json` untouched):
   the ledger prompt became `<mutation_protocol>` (`<UpdateDungeon>` grammar), the CoT
   reads `[CURRENT STATE]` and emits mutations, chargen seeds via `_.assign`/`_.insert`.
-- **Next: M5** — rewind safety (message-scope snapshots + restore-on-swipe, design §7).
+- **M4.5 done (runtime bridge)** — `src/runtime.ts` (`createRuntime`, injected deps; a
+  self-guarding `bootstrap()` reads Tavern Helper globals) + `tools/build-script.mjs`
+  (esbuild → single `dist/dungeonstate.js`; lodash/zod/yaml resolve to TH globals, json5
+  bundled) + `LOADING.md`. Injection is **depth injection** of the `[CURRENT STATE]` block
+  via `injectPrompts`/`setExtensionPrompt` — **not** a `{{dungeon_state}}` macro (the preset
+  has no such token; it reads the injected block).
+- **M5 done (rewind safety, §7)** — `src/rewind.ts` (`Timeline` interface + pure
+  `baselineBefore`) + rewired `src/runtime.ts`. The apply path moved from the iframe
+  `GENERATION_ENDED(text)` event to `MESSAGE_RECEIVED(id, type)`: apply → snapshot the
+  post-turn dungeon into the message's swipe-indexed message scope → refresh injection.
+  `GENERATION_STARTED('swipe'|'regenerate')` rolls chat scope back to the pre-turn baseline
+  (preceding message's snapshot) so re-rolls don't double-apply; `MESSAGE_SWIPED` restores a
+  navigated-to swipe; `MESSAGE_DELETED` restores the tail. `src/store.ts` gained
+  `readDungeon`/`writeDungeon` (namespaced chat-scope restore). Unit-tested incl. the
+  no-double-apply regenerate case; still needs a manual in-ST swipe/regenerate/delete check.
+- **Next: M6** — SVG map render from the `rooms` graph (design §8).
 
 ### The preset fork
 
@@ -148,8 +163,9 @@ the TTRPG depth layer (§13).
 `tools/build-phase2-preset.py` and re-run `python tools/build-phase2-preset.py`. The script
 asserts each anchor is unique and that no Phase-1 emission text survives. Mutation-command
 paths in the preset are written relative to the dungeon root (no `dungeon.` prefix), matching
-the applier. The preset *requires* the script: it references a `{{dungeon_state}}` injection
-the runtime supplies via `renderInjection`.
+the applier. The preset *requires* the script: it instructs the model to read a
+`[CURRENT STATE]` block that the runtime injects each turn (depth injection via
+`injectPrompts`, content from `renderInjection`) — there is no `{{dungeon_state}}` macro.
 
 The applier is the pure core: `applyCommands(dungeon, commands)` deep-clones its input,
 enforces the five §5 invariants, and returns `{ dungeon, delta_log, blocked, desync }`.

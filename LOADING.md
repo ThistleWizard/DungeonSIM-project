@@ -59,12 +59,22 @@ On load you should see in the browser console:
 - Persistence: HP / turn / light / discovered rooms should carry across turns without the
   model re-narrating the whole world.
 
-## Caveat — linear play only (until M5)
+## Rewind & swipes (M5)
 
-State is applied as a **delta** against stored state on each `GENERATION_ENDED`. **Swiping or
-regenerating a message can double-apply or mis-apply mutations** (e.g. HP subtracted twice),
-because message-scope snapshots and restore-on-swipe don't exist yet — that's milestone M5.
-For this first playtest, **play linearly: don't swipe or regenerate.** If state looks wrong,
+State follows the timeline. After each turn the post-turn dungeon is snapshotted into that
+message's **swipe-indexed** message-scope variables; on rewind the right snapshot is restored
+into chat scope. So these are now safe:
+
+- **Swipe** an AI message to a new generation → state is computed from the pre-turn baseline,
+  not stacked on the previous swipe.
+- **Swipe back** to an earlier swipe → chat-scope state matches that branch.
+- **Regenerate** the last message → no double-apply.
+- **Delete** the last message → state rolls back to the previous turn.
+
+Documented gaps (by design for M5): **manual text edits** to a message do **not** recompute
+state (an edited `<UpdateDungeon>` block won't re-run — treated as intentional); jumping back
+many messages / branch checkout beyond swipe/delete of the tail is best-effort; `continue` /
+`impersonate` / `quiet` generations are skipped by the apply path. If state ever looks wrong,
 inspect `dungeon.delta_log` and the variables panel; you can hand-edit the `dungeon` variable
 in Tavern Helper to recover.
 
