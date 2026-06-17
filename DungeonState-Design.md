@@ -214,6 +214,18 @@ Solution (from Tavern Helper's design): after applying mutations to `chat` scope
 - **M6 — SVG map render.** This is your original MUDMap work, now fed by `rooms` graph instead of parsed prose. Fixed-topology graph → SVG; current room highlighted. The map was always the custom piece; the schema makes it trivial to source.
 - **M7 — Sprite seed-locking.** Per-entity deterministic seed = hash(entity id); store on bestiary/inventory entries; pass with image request so a given mob/item renders identically every time. (Phase-1 sprite protocol already stores canonical fragments — this adds the seed.)
 
+### Backlog / enhancements
+
+- **Script-rendered status line (the drift-proof MUD exits/here footer).** *Interim is done:* the
+  preset's Crawl Pipeline (TASK 10) now makes the model print a `Exits: … / Here: …` footer every
+  turn, rendered from `[CURRENT STATE]`. The robust long-term version moves that render into the
+  **script**: have the runtime append a deterministic `Exits/Here` footer from the canonical `rooms`
+  graph + current-room `contents` (reuse `formatStateBlock` machinery), so the engine — not the
+  narrator — prints it and it can never disagree with state. This is the true MUD model and overlaps
+  with M6 (map render) / §14 (panel display); build it alongside those and drop the preset
+  instruction once it lands. Watch the same display constraint as the `<UpdateDungeon>` hide-rule:
+  render into the view without corrupting the stored message the parser reads.
+
 ---
 
 ## 9. Optional later: deterministic combat math (the MVU "no AI damage" idea)

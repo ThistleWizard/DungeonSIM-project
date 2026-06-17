@@ -154,7 +154,13 @@ the TTRPG depth layer (§13).
   (preceding message's snapshot) so re-rolls don't double-apply; `MESSAGE_SWIPED` restores a
   navigated-to swipe; `MESSAGE_DELETED` restores the tail. `src/store.ts` gained
   `readDungeon`/`writeDungeon` (namespaced chat-scope restore). Unit-tested incl. the
-  no-double-apply regenerate case; still needs a manual in-ST swipe/regenerate/delete check.
+  no-double-apply regenerate case, and **verified live in SillyTavern**: swipe-forward,
+  swipe-back, and delete all restore correct HP — confirming `GENERATION_STARTED` reports the
+  generation type on the target build, so the baseline rollback fires.
+- **M1–M5 verified live.** State persists, the §5 invariants hold, drift is gone, and rewind
+  is safe in the real app. The preset also gained an every-turn MUD status footer
+  (`Light:`/`Exits:`/`Here:`, rendered from `[CURRENT STATE]`; contents concealed in darkness)
+  — see the design-doc backlog for moving that render into the script (option B).
 - **Next: M6** — SVG map render from the `rooms` graph (design §8).
 
 ### The preset fork
