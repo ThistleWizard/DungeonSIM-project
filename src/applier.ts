@@ -208,8 +208,13 @@ function applySet(d: Dungeon, cmd: Command, ctx: Ctx): void {
 
   const stored = _.get(d, path);
   // Old-value confirmation: set emits [old, new]; compare claimed old to stored.
-  if (cmd.args.length >= 2 && !_.isEqual(stored, cmd.args[0])) {
-    ctx.desync(cmd, stored, cmd.args[0]);
+  // Treat null/undefined as equivalent — adding a brand-new path (e.g. a new exit)
+  // reads back as `undefined`, but the preset grammar declares the old value as `null`;
+  // both mean "absent", so that is a match, not a desync.
+  const claimedOld = cmd.args[0];
+  const bothAbsent = stored == null && claimedOld == null;
+  if (cmd.args.length >= 2 && !bothAbsent && !_.isEqual(stored, claimedOld)) {
+    ctx.desync(cmd, stored, claimedOld);
   }
   const finalV = clampForPath(d, path, newV);
   _.set(d, path, finalV);

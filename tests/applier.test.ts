@@ -107,6 +107,11 @@ describe('invariant 1 — topology lock', () => {
     expect(r.dungeon.rooms.R02.exits.west).toMatchObject({ to: 'R01', type: 'open' });
   });
 
+  it('does not flag a desync when adding a new path (claimed null vs stored undefined)', () => {
+    const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.east', [null, { to: 'R02', type: 'open' }])]);
+    expect(r.desync).toHaveLength(0);
+  });
+
   it('mirrors stairs type on the reciprocal edge', () => {
     const r = applyCommands(base(), [cmd('set', 'rooms.R01.exits.down', [null, { to: 'R02', type: 'stairs_down' }])]);
     expect(r.dungeon.rooms.R02.exits.up).toMatchObject({ to: 'R01', type: 'stairs_up' });
