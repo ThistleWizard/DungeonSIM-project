@@ -51,6 +51,23 @@ export const ExitSchema = z.object({
     'secret',
   ]),
   state: z.enum(['open', 'closed', 'locked', 'barred', 'hidden', 'broken']).default('open'),
+
+  // How this link relates to space, for layout (M6, §spec A1). The INTERIOR WIRING,
+  // independent of `type` (the fiction): a `type:'archway'` may be `category:'portal'`,
+  // a ritual circle that's secretly a trapdoor is `category:'vertical'`. Defaults to
+  // 'spatial' so every existing exit grid-walks exactly as before.
+  //   spatial  — the eight compass directions; grid-walked into cells.
+  //   vertical — up/down between depths (stairs/ladder/hole); a depth-marker, never positioned.
+  //   portal   — non-spatial teleport (ritual circle, arch); a named marker, never positioned.
+  category: z.enum(['spatial', 'vertical', 'portal']).default('spatial'),
+
+  // The TRUE access requirement (model-authoritative; used to adjudicate attempts).
+  // 'none' = freely openable. The others are obstacle SEEDS; overcoming them is the
+  // deferred action-resolution layer, not coded here (§spec A2, Deferred).
+  lock: z.enum(['none', 'key', 'pickable', 'magical', 'barred', 'sealed']).default('none'),
+  // Has the player DISCOVERED this exit's lock nature? Binary for now (one interaction
+  // reveals the full lock type). The renderer shows lock styling only when true.
+  lock_revealed: z.boolean().default(false),
 });
 
 export const RoomContentSchema = z.object({
@@ -69,6 +86,10 @@ export const RoomEffectSchema = z.object({
 export const RoomSchema = z.object({
   id: z.string(), // "R03" — immutable once created
   name: z.string(),
+  // Dungeon level this room sits on (M6 §spec B1). The model already tracks meta.depth;
+  // stamp each room's depth at creation so the automap can filter to the current level.
+  // Defaulted to 1 so existing saved rooms remain valid.
+  depth: z.number().int().min(1).default(1),
   descr: z.string().default(''),
   exits: z.record(z.string(), ExitSchema).default({}), // keyed by direction
   contents: z.array(RoomContentSchema).default([]),

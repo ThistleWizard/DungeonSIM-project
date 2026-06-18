@@ -161,7 +161,24 @@ the TTRPG depth layer (§13).
   is safe in the real app. The preset also gained an every-turn MUD status footer
   (`Light:`/`Exits:`/`Here:`, rendered from `[CURRENT STATE]`; contents concealed in darkness)
   — see the design-doc backlog for moving that render into the script (option B).
-- **Next: M6** — SVG map render from the `rooms` graph (design §8).
+- **M6 done (automap, see `DungeonState-M6-spec.md`)** — `src/map.ts` (`renderMap`, pure:
+  grid-walk layout from the `rooms` graph → 8-bit SVG of the current depth; deterministic +
+  stable coordinates, current-room amber highlight, undiscovered-exit `?` stubs,
+  vertical/portal markers, `data-room-id`/`<title>` hooks for M8) + exported `computeLayout`
+  (the layout seam, used by tests). Honours the three-layer knowledge model (§spec B6): the
+  map draws only what the player can perceive (cartographer model): secret (`state:'hidden'`)
+  exits and unrevealed locks never appear, and a link's WIRING (`category`) + destination stay
+  hidden until traversed — visible fiction is shown (stairs read as `↓`/`↑`), but a trapdoor
+  disguised as an archway renders as a plain unexplored stub until used. `src/commands.ts`
+  (`registerMapCommand`, injectable;
+  `bootstrapMapCommand` reads `SillyTavern.getContext()` for `SlashCommandParser` + popup) wires
+  `/map`, registered from runtime's bootstrap against the shared chat-scope store. Schema gained
+  additive, defaulted forward-compat fields (M1–M5 safe): exit `category`
+  (`spatial`/`vertical`/`portal` — interior wiring, independent of fiction `type`), `lock` +
+  `lock_revealed` (discoverable locks), and room `depth`. These make portals/branches/locks
+  *representable*; their gameplay stays deferred (§13/§15). **Verified live in SillyTavern:**
+  `/map` registers and renders an accurate current-depth automap in the running app.
+- **Next: M7** — sprite seed-locking (design §8).
 
 ### The preset fork
 
