@@ -4,7 +4,7 @@
  * current dungeon from the store and feeds renderMap's SVG to the display sink.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { registerMapCommand } from '../src/commands.js';
+import { registerAllCommands, registerMapCommand } from '../src/commands.js';
 import { makeStore } from '../src/store.js';
 import { DungeonSchema, ROOT_KEY } from '../src/schema.js';
 
@@ -74,5 +74,34 @@ describe('/map command (M6 §C)', () => {
     expect(svg).toContain('DEPTH 2');
     expect(svg).not.toContain('Upper'); // depth-1 room excluded
     expect(svg).toContain('Lower');
+  });
+});
+
+describe('registerAllCommands (M8 prep)', () => {
+  it('registers /map, /character and /inventory, each rendering from stored state', () => {
+    const dungeon = DungeonSchema.parse({
+      player: { name: 'Bramble', class: 'Cleric', location: 'R01' },
+      rooms: { R01: { id: 'R01', name: 'Entry', depth: 1, exits: {} } },
+      inventory: [{ id: 'mace', name: 'Iron Mace', equipped: true }],
+    });
+    const display = vi.fn();
+    const handlers = new Map<string, () => void>();
+
+    registerAllCommands({
+      store: storeWith(dungeon),
+      display,
+      registerCommand: spec => handlers.set(spec.name, spec.callback),
+    });
+
+    expect([...handlers.keys()].sort()).toEqual(['character', 'inventory', 'map']);
+
+    handlers.get('character')!();
+    expect(display.mock.calls.at(-1)).toMatchObject([expect.stringContaining('Bramble'), 'Character']);
+
+    handlers.get('inventory')!();
+    expect(display.mock.calls.at(-1)).toMatchObject([expect.stringContaining('Iron Mace'), 'Inventory']);
+
+    handlers.get('map')!();
+    expect(display.mock.calls.at(-1)).toMatchObject([expect.stringContaining('<svg '), 'Automap']);
   });
 });

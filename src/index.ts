@@ -9,5 +9,6 @@ export * from './applier.js';
 export * from './inject.js';
 export * from './store.js';
 export * from './map.js';
+export * from './sheet.js';
 export * from './commands.js';
 export * from './runtime.js';

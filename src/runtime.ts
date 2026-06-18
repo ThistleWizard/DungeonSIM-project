@@ -25,7 +25,7 @@ import type { ApplyResult } from './applier.js';
 import { type Dungeon, emptyDungeon, ROOT_KEY } from './schema.js';
 import { baselineBefore, type Timeline } from './rewind.js';
 import { makeStore, processMessage, renderInjection, writeDungeon, type VariableStore } from './store.js';
-import { bootstrapMapCommand } from './commands.js';
+import { bootstrapCommands } from './commands.js';
 
 /** Shape of a Tavern Helper prompt injection (subset of its InjectionPrompt we use). */
 export interface InjectPrompt {
@@ -235,10 +235,10 @@ function bootstrap(): void {
       },
       warn,
     });
-    // M6: register the /map slash command against the same chat-scope store.
-    bootstrapMapCommand(store, warn);
+    // M6+: register the player-facing view commands (/map, /character, /inventory).
+    bootstrapCommands(store, warn);
     console.info(
-      '[DungeonState] runtime initialised (chat-scope state, message-scope rewind, [CURRENT STATE] injection, /map).',
+      '[DungeonState] runtime initialised (chat-scope state, message-scope rewind, [CURRENT STATE] injection, /map /character /inventory).',
     );
   } catch (err) {
     console.error('[DungeonState] failed to initialise:', err);
