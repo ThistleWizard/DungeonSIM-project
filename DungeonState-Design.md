@@ -214,18 +214,6 @@ Solution (from Tavern Helper's design): after applying mutations to `chat` scope
 - **M6 — SVG map render.** This is your original MUDMap work, now fed by `rooms` graph instead of parsed prose. Fixed-topology graph → SVG; current room highlighted. The map was always the custom piece; the schema makes it trivial to source.
 - **M7 — Sprite seed-locking.** Per-entity deterministic seed = hash(entity id); store on bestiary/inventory entries; pass with image request so a given mob/item renders identically every time. (Phase-1 sprite protocol already stores canonical fragments — this adds the seed.)
 
-### Backlog / enhancements
-
-- **Script-rendered status line (the drift-proof MUD exits/here footer).** *Interim is done:* the
-  preset's Crawl Pipeline (TASK 10) now makes the model print a `Exits: … / Here: …` footer every
-  turn, rendered from `[CURRENT STATE]`. The robust long-term version moves that render into the
-  **script**: have the runtime append a deterministic `Exits/Here` footer from the canonical `rooms`
-  graph + current-room `contents` (reuse `formatStateBlock` machinery), so the engine — not the
-  narrator — prints it and it can never disagree with state. This is the true MUD model and overlaps
-  with M6 (map render) / §14 (panel display); build it alongside those and drop the preset
-  instruction once it lands. Watch the same display constraint as the `<UpdateDungeon>` hide-rule:
-  render into the view without corrupting the stored message the parser reads.
-
 ---
 
 ## 9. Optional later: deterministic combat math (the MVU "no AI damage" idea)
@@ -262,27 +250,55 @@ If you also pull MVU **for design reference only** (do not install/run):
 
 ---
 
-## 13. TTRPG depth layer (post-M3 content, parked)
+## 13. Conditional injection — the content-cartridge architecture (post-M8)
 
-*Captured during Phase-1 play. NOT new engine work — texture and permission on top of the existing adjudication primitive. Build as the FIRST content authored against the schema, after M3, because every element below wants to be a persisted field rather than re-emitted prose.*
+*Captured during Phase-1 play and expanded into the project's content architecture. This is the unifying idea for ALL expandable depth: class abilities, spells, regional content, faction mechanics, lock/portal gameplay. Build the SYSTEM as foundation-adjacent; populate it minimally for v1; the full content library is v1.1+. NOT started until the shippable Gold Box core (M1-M8) is done.*
 
-**Core principle:** the LLM was put under this game precisely to adjudicate thematically-appropriate actions the rules don't enumerate. This layer is permission + texture so the model reaches for `action_resolution_engine` more readily in the magical and tactical register. Enumerate ONLY what touches tracked mechanics; adjudicate everything else freely.
+### The principle (the same move, a third time)
+The whole project moves things OUT of the static prompt into the deterministic layer, which injects only what is situationally live:
+- **State engine (M1-M6):** inject the CURRENT room, not the whole map.
+- **Conditional rules (this section):** inject the CURRENT character's/region's rules, not all rules.
+Same abstraction, applied to RULES and CONTENT instead of state values. The payoff is identical and large: **context cost scales with where you ARE, not with how much game EXISTS.** A 40-region, 200-level world costs the same per turn as a 5-level one, because only the live cartridge is in context.
 
-- **Caster cantrips (enumerate — they touch tracked state).** Short fixed list per caster class for effects that interact with persisted mechanics, so behaviour doesn't drift. Priority case: **Light** (1 charge, illuminates current room, ~10 ticks) — plugs into the existing light/darkness tracking that the time-skip danger modifier and dark-room sensory limits already key off. Others: mend, spark, a minor ward, detect. Each becomes a `conditions`/`light` entry with a real duration, not prose.
+### Three injection kinds (mental model)
+1. **Always-on engine** — the preset blocks (combat, resolution, prose, neutral bias). Every turn.
+2. **Per-turn state** — the `[CURRENT STATE]` block from `inject.ts`. Every turn, current situation only.
+3. **Conditional cartridges (NEW)** — bundles of rules/content, dormant until a trigger in deterministic state activates them. The deterministic layer is the switch: trigger is DATA, payload is RULES/CONTENT.
 
-- **Ritual / improvised magic (do NOT enumerate — adjudicate).** One license block: cleric blessing a room, turning/driving undead, consecrating a threshold, a mage improvising an effect from components — all legitimate attempts, each gets an honest DC keyed to class + circumstance + resources, with real consequences (success, partial, backfire). This is the same primitive as Jeremy's improvised trip-line, in the magical register. The block is ~200 words, genre-agnostic.
+### Cartridges are DATA, not prompt
+A `rules/` (or `content/`) dictionary keyed by trigger:
+- `class.cleric` — pantheon, domains, divine spell list, turn-undead mechanic.
+- `class.mage` — arcane schools, spell list, cantrips.
+- `location.dwarven_mines` — faction defs (dwarves vs goblin/orc incursion), regional mob types + stats, loot tables, side-with-a-faction branching, regional flavor.
+- `location.wizards_tower` — its own bestiary, mechanics, loot.
+- (later) `condition.cursed`, `room.has_locked_exit` (lock gameplay), etc.
 
-- **The Elbereth principle (the design north star for this layer).** NOT a hardcoded ward. The value is "a player can take an interesting, thematically-resonant action and have it genuinely matter." Hardcoding specific gestures betrays the open-endedness; enabling the *class of move* is the whole point. Applies equally to non-protective actions (carving a warning, leaving an offering, invoking a name).
+Each entry = rules-text (the fiction + how-to-adjudicate) + optional structured data (e.g. a spell list as JSON the model references). At injection time the deterministic side reads state, selects matching cartridges, and concatenates their text alongside the state block. A mage never sees the religion cartridge; a tower-climber never carries the mines' bestiary.
 
-- **Multipart / complex combat maneuvers (mostly adjudicate; results become tracked).** Fighter executing "hook the shield down, then headbutt", disarms, shoves into hazards, called shots, two-stage actions. Adjudicated through the combat + resolution engines; the *outcomes* become real tracked statuses (mob `status: "off-balance"`, `"disarmed"`, `"prone"`; player `conditions`). The texture is in the adjudication; the persistence is what makes it stick across turns.
+### Two axes, both proven by example
+- **Class-triggered rules** (`player.class === 'cleric'`): who the player IS. Stable for the whole run — easy, inject for the session.
+- **Location-triggered content** (`player.location` within a region, or `meta.depth` in a range): where the player IS. A region is a self-contained **content cartridge** loaded on entry, unloaded on exit. New region = new dictionary entry: zero engine changes, zero added per-turn cost elsewhere. This is the authoring economy that makes a big shareable world feasible — a frame (engine M1-M8) plus a library of cartridges; the world is the sum of cartridges authored. Someone else could write `location.sunken_cathedral` and drop it in.
 
-**Why post-M3 / why it justifies the engine.** Right now a blessed room, a ward's remaining duration, a cantrip's ticks, or a mob's "off-balance" debuff would live in fragile re-emitted prose. Once DungeonState is authoritative these are trivial and durable:
-- room effects → `rooms.<id>.effects: [ {name, ticks} ]`  *(new schema field)*
-- caster/temporary effects → expand existing `player.conditions`
-- maneuver results → existing `combat.mobs[].status`
-So this layer is the natural first thing to author against the schema — almost a justification for building it. Enumerate only what touches persisted mechanics; adjudicate the rest.
+### Within-cartridge branching (cartridges aren't static lore)
+A region cartridge holds CONDITIONAL content keyed to schema state. Dwarven mines: side with dwarves -> some mobs turn friendly, loot opens, orcs escalate; side with orcs -> inverse; neutral -> both hostile. The branching STATE lives in the validated schema (e.g. a `region_state` / faction-standing field); the cartridge's rules-text tells the model how to READ that state and how player choices mutate it. So a cartridge = rules + instructions for how choices reshape the region — the open-ended, choice-driven core, scoped to an authorable domain.
 
-**Schema impact when built:** add `effects: z.array(z.object({name, ticks: z.number().nullable()})).default([])` to `RoomSchema`; no other structural change (conditions and mob status already exist).
+### Three real caveats (design around, don't discover)
+1. **Transition vs state triggers.** Class is set at chargen and never changes (trivial: latch for the run). Location/condition cartridges flicker on/off as the player moves; a cartridge appearing/vanishing mid-conversation can confuse the model (abilities silently appearing/disappearing). Likely answer: some cartridges, once activated, LATCH for the session even if the trigger passes. v1 starts with the clean cases (class-triggered, region-on-entry); latched dynamic triggers are a later question.
+2. **New authoring surface = feature-creep risk.** Cheap-to-add is how scope balloons. Build the SYSTEM; populate it minimally for v1 (enough per-class flavor to make classes distinct; ONE or TWO polished regions). A full twelve-deity pantheon, or ten regions, is exactly the §15 someday-pile. The architecture must hold the full library (costs nothing extra, and building it narrowly is the thing you'd regret); the CONTENT ships disciplined.
+3. **Validation/consistency.** Any cartridge-granted ability with MECHANICAL effect (a spell, a faction standing) needs a home in the validated schema so injected rules and tracked state stay coherent. Same principle as before: enumerate only what touches tracked mechanics; describe the rest as free fiction. Cartridges and schema co-design where they overlap.
+
+### This subsumes the old "TTRPG depth layer" and lock/portal gameplay
+- **Cantrips / ritual magic / class abilities** become per-class cartridges (`class.cleric`, `class.mage`), not one monolithic block. Enumerated cantrips that touch tracked state (e.g. Light -> the light/ticks mechanic) live in schema; free ritual magic is adjudicated. (The Elbereth principle still governs: enable the CLASS of thematically-resonant action and make it matter; don't hardcode specific gestures.)
+- **Multipart combat maneuvers** -> results become tracked statuses (mob `status: off-balance/disarmed/prone`), as before.
+- **Lock gameplay** (overcoming pickable/magical/barred/sealed) becomes a cartridge triggered when the player faces a revealed lock.
+- **Enter/portal/vertical gameplay** (Gnomish-Mines branch-to-deeper-floor vs UUII same-area teleport) is region-transition logic that cartridges and the applier handle.
+
+### Schema impact when built
+Add `region_state` (or similar) for within-cartridge branching/faction standing; expand `player` to hold class-granted known spells/abilities (so cartridge rules and tracked state cohere); room `effects` already added for §-style effects. The cartridge dictionary itself lives outside the per-chat state (it's authored content, like the preset) and is referenced by the injection layer.
+
+### Sequence
+Post-M8 (after the shippable Gold Box core). Build the injection/cartridge SYSTEM first; ship with class flavor + one polished region (the dwarven mines is the natural candidate — factions, branching, a self-contained 5-level arc). Everything else is v1.1 library growth.
+
 
 ---
 
@@ -309,3 +325,66 @@ So this layer is the natural first thing to author against the schema — almost
 **Dependency on M5 (important):** a live panel UI reading chat-scope state will display INCORRECTLY on swipe/rewind unless M5's message-scope snapshot consistency is solid — map/sheet would show post-turn state while the text shows the rewound turn. The pretty display therefore RAISES the stakes on getting rewind right. Do not build M8 until M5 is correct and tested.
 
 **Sequence:** M4 patches → M5 rewind → M6 map render (feeds the map panel) → M7 sprite seeds (feeds the viewport panel) → M8 panel display assembles the four zones. M8 is largely a CSS/layout + component-wiring project once M6/M7 exist; almost no new state work.
+
+---
+
+## 16. Narrative-thread tracking (post-M8) — and the anti-railroading mandate
+
+*The fifth pillar. Every other system keeps the WORLD consistent (geometry, state, rules, content); this keeps the STORY consistent — it closes the gap between "a dungeon that remembers its geometry" and "a dungeon that remembers its promises." Build the SYSTEM post-M8; seed lightly for v1; full use is v1.1. Read the anti-railroading section first — it is the spine, not a caveat.*
+
+### The design north star (the thesis everything serves)
+DungeonSIM is a **single-player freeform tabletop experience in Gold Box clothing**: the structure and legibility of a CRPG with the actual creative latitude of a good DM behind the screen. The point of an LLM narrator is that the player can do whatever they think of; the model simulates, responds, and challenges, but MUST NOT railroad. Every architectural choice is downstream of this. The thread system tests it hardest.
+
+### The failure mode it solves
+Models write something evocative — Jeremy gets a cursed ring — then the thread exists only as PROSE in the context window. It scrolls out, and the Chekhov's gun never fires: nothing remembers it was loaded. Same "interesting thing lives only in fading prose" failure this project solves everywhere else, now for NARRATIVE threads.
+
+### Why preset "Chekhov trackers" are mediocre (and ours can work)
+FrankenSIM-class presets ask the MODEL to track hooks in a prose block it re-emits each turn — the re-emission fragility already killed for state: drifts, hooks silently vanish, no enforcement. We have the deterministic layer they don't: hold threads authoritatively, surface them when relevant, never lose them.
+
+### THE ANTI-RAILROADING MANDATE (the spine — design against the host's instincts)
+RLHF-tuned models are EAGER. Eagerness + a tracked objective = a sycophantic DM: told the cursed ring matters, it mentions the ring every turn, telegraphs its importance, nudges the player toward it, and treats not-resolving-it as failing the task. That is the assistant reflex ("open objective -> make progress -> the user will be pleased"). A good DM does the opposite: holds the ring in their back pocket, says nothing, waits — maybe forever, if the player melts it down for components. A thread is **latent leverage, not pending homework.** The craft is restraint.
+
+This battle is won or lost in the INJECTION FRAMING. The same stored thread, surfaced two ways, produces opposite behavior:
+- BAD: `ACTIVE QUEST: resolve the curse of the ring` -> the model nags.
+- GOOD: `The ring's curse remains dormant and unmentioned; it MAY surface if dramatically apt, or never.` -> the model is given PERMISSION TO STAY SILENT, which assistant-tuning will not supply on its own.
+The tracker's job is NOT to remind the model to act. It is to PRESERVE THE OPTION to act (so a good beat isn't lost to context) while explicitly LICENSING INACTION. This inverts how presets frame Chekhov trackers, and the inversion is the whole insight.
+
+**Deeper principle (generalizes past threads):** tune the model, via architecture, toward being a WORLD, not a STORYTELLER. A world has latent possibilities the player's choices activate; a storyteller has a tale they're pushing. The neutral-bias block already does this for MECHANICAL fairness (indifferent dungeon, doesn't scale, answers recklessness in full). Threads need the NARRATIVE equivalent: the dungeon CONTAINS unresolved threads the way it contains unopened doors — there if you pull on them, inert if you don't, no urgency to make you. "Indifferent" is the key word in both registers: the cursed ring no more wants to complete its arc than a locked door wants to be opened. Give the model the identity (indifferent world) that makes restraint IN-CHARACTER rather than a suppressed instinct.
+
+### Two halves: reactive core (recommended) vs proactive seeding (risky layer)
+- **Reactive capture (CORE, unambiguously good).** When the model writes something with narrative promise, a thread is recorded in the deterministic layer (persists past context). The injection layer surfaces ACTIVE, IN-SCOPE, UNRESOLVED threads back into context at relevant moments — framed per the mandate above — so the model CAN fire the gun when apt. Closes when resolved (or marked failed/abandoned).
+- **Proactive seeding (OPTIONAL, restraint-required).** Generate a few latent hooks per level/region up front, woven into rooms, so exploration CAN reveal an arc. Double-edged: pre-authored arcs become rails if the model commits hard to a plot. Resolution: seeded hooks are LATENT and OPTIONAL — "this level CAN yield these threads if pulled on," never "this level WILL tell this story." Seed sparingly. Region cartridges (§13) may carry a few region-appropriate hook-seeds that activate on entry. Lead with reactive; treat seeding as a tunable layer, framed as affordances not plot.
+
+### Architecture (the same pattern a fifth time)
+A `threads` structure in the schema. Each thread: `id`, `description`, `status` (`latent | active | resolved | failed`), optional `anchor` (entity/room id it attaches to), optional `scope` (level/region — so it deactivates when you leave, like cartridges). The model emits thread mutations through the EXISTING `_.set`/`_.add` command channel — open on introduction, advance, resolve. The applier persists them. The injection layer surfaces only LIVE (active, in-scope, unresolved) threads — same selectivity as the room/state injection. Composes with §13 cartridges: a region ships latent hook-seeds that activate on entry and surface as explored.
+
+### Three caveats (consistent with the ones already managed)
+1. **Surface-it-relevantly (the hard part, expect playtest iteration).** Dumping all open threads every prompt = noise + bloat; never surfacing = stored but inert. Judgment on WHEN to remind: when the anchoring entity/room is in play; periodically for level-scoped threads; a gentle nudge if dormant too long. Tuning problem, the thing most likely to need iteration.
+2. **Don't force resolution.** A tracked thread must not make the model feel obligated to resolve it NOW (every thread firing predictably kills suspense). The system records and OPTIONALLY reminds; the model decides timing. Framing: "this remains open," never "resolve this."
+3. **Discipline.** Build the system; seed lightly for v1. A couple of reactive threads that actually pay off > an elaborate hook engine that railroads. v1.1 territory; pairs with §13 (threads are another conditional, scoped, injected-when-live structure); sits after the shippable Gold Box core.
+
+### Schema impact when built
+Add `threads` (array or record) per the shape above. The injection layer gains a thread-selection + framing step (the mandate). No change to the mutation channel or applier core (threads use existing verbs); the applier may gain a light guard (e.g. resolved threads are terminal). 
+
+---
+
+## 15. Status log & milestone state (living)
+
+*Updated as milestones land. Keeps the "someday pile" visible and dated so deferred ideas don't nag during the push to a shippable Gold Box core.*
+
+**Done & validated (live-tested in SillyTavern):** M1 schema, M2 parser, M3 applier + invariants, M4 patches (all four landed), M5 rewind/swipe safety (reviewed; one-line deletion-scan fix applied; 71 tests + 8 adversarial pass).
+
+**M6 automap — built, unit-tested (not yet live-tested):** see `DungeonState-M6-spec.md`. Pure `renderMap()` in `src/map.ts` (deterministic + stable grid-walk, current-depth filter, current-room amber highlight, undiscovered `?` stubs, vertical/portal markers, `data-room-id`/`<title>` hooks) + exported `computeLayout` seam; `/map` slash command in `src/commands.ts` (injectable `registerMapCommand` + `bootstrapMapCommand` reading `SillyTavern.getContext()`), wired from runtime's bootstrap. Forward-compat schema fields landed (additive/defaulted, M1–M5 safe): exit `category`, true `lock`, `lock_revealed`; room `depth` — portals/branches/discoverable-locks are REPRESENTABLE; their gameplay stays deferred. The knowledge model is **cartographer-style** (a deliberate refinement of B6, confirmed with the user): the map shows what the player can SEE (the exit's fiction/`type`) but hides the WIRING (`category`) and destination until a link is traversed — so visible stairs read as `↓`/`↑` immediately (you can see the staircase in your own room), while a trapdoor disguised as an archway stays an ordinary unexplored stub until used. Secret (`state:'hidden'`) exits and unrevealed locks render nothing. All test-guarded. 86 tests pass. **TODO: live-test `/map` in SillyTavern** (renderer is pure + covered; the popup wiring is the only un-exercised surface).
+
+**Next:** M7 sprite seed-locking → M8 Gold Box panel layout (§14). After M8 the shippable core is complete.
+
+**The shippable v1 target (the line that defines "done"):** character lifecycle (chargen→descent→permadeath, working) + authoritative state (M1–M5, done) + Gold Box four-panel view (M6→M7→M8) + content polish so a stranger gets it unaided. Everything below is v1.1+ richness, deliberately deferred:
+
+- **§13 conditional-injection / content-cartridge architecture** — the unifying system for expandable depth: per-class rules cartridges (cantrips, spells, abilities), location cartridges (regional bestiary/loot/factions, e.g. dwarven_mines), within-cartridge branching via schema state, lock/portal gameplay as triggered cartridges. Build the SYSTEM post-M8; ship with class flavor + ONE polished region; full library is v1.1+. Additive token cost: context scales with where you are, not how much game exists.
+- **Lock gameplay** — overcoming `pickable`/`magical`/`barred`/`sealed` (lockpick/knock/bash/remote-mechanism). Pairs with §13. M6 renders locks once revealed; doesn't resolve them.
+- **Enter/portal/vertical gameplay** — `enter` that spawns a deeper level (NetHack Gnomish-Mines trap) vs same-area teleport (Ultima Underworld II portal). Surface fiction (`type`) is independent of interior wiring (`category`); the divergence is a design tool (a ritual circle that's secretly a trapdoor to depth 3). M6 renders these as markers; doesn't spawn the destinations.
+- **Graduated lock discovery** — binary (one interaction reveals full lock nature) for now.
+- **§16 narrative-thread tracking** — reactive capture of narrative hooks (the cursed ring problem) held in the deterministic layer and surfaced when relevant, framed to LICENSE INACTION (anti-railroading mandate); optional sparing proactive seeding. Build post-M8; seed lightly for v1. The pillar that keeps the STORY coherent as the others keep the WORLD coherent.
+- **Multi-level map view, sprite reference-sheet img2img (§ earlier note), manual save/export, schema migration** — all parked.
+
+**Guiding discipline:** inspired by NetHack/Dwarf Fortress depth, but those are decades-long no-ship-date projects. The path to sharing DungeonSIM is a COMPLETE Gold Box experience, not a maximal one. Keep ideas in the pile until the core ships.

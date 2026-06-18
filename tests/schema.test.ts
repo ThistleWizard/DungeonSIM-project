@@ -22,7 +22,55 @@ describe('DungeonSchema (M1)', () => {
     expect(r.visited).toBe(true);
     expect(r.contents).toEqual([]);
     expect(r.effects).toEqual([]);
-    expect(r.exits.north).toEqual({ to: 'R02', type: 'door', state: 'open' });
+    // M6 forward-compat defaults: a bare exit grid-walks as before and reveals nothing.
+    expect(r.exits.north).toEqual({
+      to: 'R02',
+      type: 'door',
+      state: 'open',
+      category: 'spatial',
+      lock: 'none',
+      lock_revealed: false,
+    });
+  });
+
+  it('stamps the M6 forward-compat defaults (room depth, exit category/lock)', () => {
+    const d = DungeonSchema.parse({
+      rooms: { R01: { id: 'R01', name: 'Entry', exits: { north: { to: 'R02', type: 'door' } } } },
+    });
+    expect(d.rooms.R01.depth).toBe(1);
+    expect(d.rooms.R01.exits.north.category).toBe('spatial');
+    expect(d.rooms.R01.exits.north.lock).toBe('none');
+    expect(d.rooms.R01.exits.north.lock_revealed).toBe(false);
+  });
+
+  it('validates an exit with category:portal and a discovered lock', () => {
+    const parsed = DungeonSchema.safeParse({
+      rooms: {
+        R01: {
+          id: 'R01',
+          name: 'Sanctum',
+          depth: 2,
+          exits: {
+            enter: { to: 'R09', type: 'archway', category: 'portal', lock: 'magical', lock_revealed: true },
+          },
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      const e = parsed.data.rooms.R01.exits.enter;
+      expect(e.category).toBe('portal');
+      expect(e.lock).toBe('magical');
+      expect(e.lock_revealed).toBe(true);
+      expect(parsed.data.rooms.R01.depth).toBe(2);
+    }
+  });
+
+  it('rejects an unknown exit category', () => {
+    const bad = DungeonSchema.safeParse({
+      rooms: { R01: { id: 'R01', name: 'x', exits: { north: { to: 'R02', type: 'door', category: 'diagonal' } } } },
+    });
+    expect(bad.success).toBe(false);
   });
 
   it('rejects an out-of-range skill rank', () => {
