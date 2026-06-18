@@ -198,11 +198,15 @@ the TTRPG depth layer (§13).
   `refreshInjection`, and `bootstrap()` registers the panel's `refresh` there — so the panel
   can never disagree with the chat (the §14 M5 dependency, free). Shared `src/style.ts`
   (palette + `panel()` card) keeps all tiles identical; `sheet.ts` refactored onto it.
-- **Next: M7** — sprite system fills the M8 viewport's `data-viewport` hook. **Cache-first** (generate once per entity id, async + off the
-  turn's critical path, reuse from cache; `hash(id)` seed is the regeneration recipe, not the
-  consistency guarantee). Backend = hook ST's Image Generation extension via `triggerSlash('/sd …')`
-  (inherits the user's configured Source — no backend code). Toggleable; location sprites deferred.
-  See design §15 for the full plan.
+- **Next: M7** — sprite system fills the M8 viewport's `data-viewport` hook. **LIBRARY-first**
+  (reframed with the user; supersedes the earlier generate-and-cache plan). Ladder: **curated
+  tagged sprite pack (primary) → image-gen fallback → text/placeholder**. The model emits tags
+  on a new bestiary type; a PURE resolver matches tags → a concrete sprite (`hash(id)` tie-break
+  for variety) and locks the ref onto the entry. **Pack-agnostic** (decided): the pack is a
+  manifest `{ id: { tags, src } }` of content (base64-inline viable since 8-bit sprites are
+  tiny), outside per-chat state. Ship a CC0/licensed pack as default (Gold Box rips are
+  copyrighted — fine locally, not redistributable). Gen fallback keeps the cache-once design via
+  ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan.
 
 ### The preset fork
 
