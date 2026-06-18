@@ -176,7 +176,8 @@ the TTRPG depth layer (§13).
   additive, defaulted forward-compat fields (M1–M5 safe): exit `category`
   (`spatial`/`vertical`/`portal` — interior wiring, independent of fiction `type`), `lock` +
   `lock_revealed` (discoverable locks), and room `depth`. These make portals/branches/locks
-  *representable*; their gameplay stays deferred (§13/§15).
+  *representable*; their gameplay stays deferred (§13/§15). **Verified live in SillyTavern:**
+  `/map` registers and renders an accurate current-depth automap in the running app.
 - **Next: M7** — sprite seed-locking (design §8).
 
 ### The preset fork
