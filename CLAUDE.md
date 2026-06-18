@@ -185,7 +185,10 @@ the TTRPG depth layer (§13).
   `/map`, `/character`, `/inventory`. Pulled forward so M8 is layout/CSS over proven renderers.
   `/spellbook` deferred (no spells field in the schema until the §13 class-cartridge layer).
   **Verified live in SillyTavern:** all three commands register and render correctly.
-- **M8 done (Gold Box display panel, §14) — built + unit-tested; live-test pending.**
+- **M8 done (Gold Box display panel, §14) — built, unit-tested, and live-verified in SillyTavern**
+  (button + `/display`, per-turn updates, swipe/delete consistency, narrow→tabs all confirmed).
+  Follow-up: **graphical/appearance pass** on the panel still wanted (layout/styling polish — the
+  renderers work; the look is not yet dialed in).
   `src/display.ts`: pure `renderDisplay` (a 2×2 dashboard of Viewport · Map · Character ·
   Inventory tiles, each reusing the existing renderers) + `renderViewport` (a live text
   stand-in — current room, or faced mob in combat — carrying a `data-viewport` hook M7 fills
