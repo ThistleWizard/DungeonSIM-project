@@ -12,33 +12,7 @@
  * palette so the panels read as one display when M8 assembles them.
  */
 import type { Dungeon } from './schema.js';
-
-const C = {
-  bg: '#0b0d10',
-  panel: '#11161d',
-  stroke: '#4a5a6a',
-  text: '#c9d4df',
-  dim: '#6b7886',
-  amber: '#e8c468',
-  hp: '#b5495b',
-  accent: '#3f6e8c',
-};
-
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-/** Outer card with an amber title bar, matching the automap look. */
-function panel(title: string, inner: string): string {
-  return (
-    `<div style="font-family:monospace;background:${C.bg};color:${C.text};` +
-    `border:1px solid ${C.stroke};border-radius:6px;padding:12px;max-width:520px;width:100%;box-sizing:border-box">` +
-    `<div style="color:${C.amber};font-weight:bold;letter-spacing:0.5px;` +
-    `border-bottom:1px solid ${C.stroke};padding-bottom:6px;margin-bottom:10px">${title}</div>` +
-    inner +
-    `</div>`
-  );
-}
+import { PALETTE as C, esc, panel } from './style.js';
 
 function bar(cur: number, max: number, color: string): string {
   const pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;

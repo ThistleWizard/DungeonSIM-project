@@ -1,0 +1,75 @@
+/**
+ * display.test.ts — the M8 Gold Box panel. The mount/widget/ST-DOM wiring is the guarded
+ * `bootstrapDisplay` (no-ops under Vitest, like runtime's bootstrap); here we test the PURE
+ * `renderDisplay` / `renderViewport`: that all four tiles render from state, the responsive
+ * chrome is present, and the active tab is honoured.
+ */
+import { describe, expect, it } from 'vitest';
+import { renderDisplay, renderViewport } from '../src/display.js';
+import { DungeonSchema } from '../src/schema.js';
+
+function world() {
+  return DungeonSchema.parse({
+    meta: { depth: 1 },
+    player: { name: 'Bramble', class: 'Cleric', location: 'R01', hp: { cur: 9, max: 16 } },
+    rooms: { R01: { id: 'R01', name: 'Entry Hall', depth: 1, exits: {} } },
+    inventory: [{ id: 'mace', name: 'Iron Mace', equipped: true }],
+  });
+}
+
+describe('renderDisplay (M8)', () => {
+  const html = renderDisplay(world());
+
+  it('assembles all four tiles from state', () => {
+    expect(html).toContain('<svg '); // map
+    expect(html).toContain('Bramble'); // character sheet
+    expect(html).toContain('9 / 16'); // sheet HP
+    expect(html).toContain('Iron Mace'); // inventory
+    expect(html).toContain('VIEWPORT'); // viewport tile
+    expect(html).toContain('Entry Hall'); // viewport stand-in shows the current room
+  });
+
+  it('emits the responsive chrome: scoped style, a 2×2 container query, tab bar + tiles', () => {
+    expect(html).toContain('.ds-display');
+    expect(html).toContain('@container (min-width:480px)');
+    expect(html).toContain('grid-template-columns:1fr 1fr'); // quadrants when wide
+    expect(html).toContain('class="ds-tabs"');
+    expect(html.match(/class="ds-tab[ "]/g)?.length).toBe(4); // four tab buttons
+    expect(html.match(/class="ds-tile/g)?.length).toBe(4); // four tiles
+  });
+
+  it('marks the default tab (map) active, and honours an explicit activeTab', () => {
+    // The map tab + tile carry ds-active by default.
+    expect(html).toMatch(/class="ds-tab ds-active" data-tab="map"/);
+    expect(html).toMatch(/class="ds-tile ds-active" data-tab="map"/);
+    const onChar = renderDisplay(world(), { activeTab: 'character' });
+    expect(onChar).toMatch(/class="ds-tab ds-active" data-tab="character"/);
+    expect(onChar).not.toMatch(/class="ds-tab ds-active" data-tab="map"/);
+  });
+
+  it('is deterministic', () => {
+    expect(renderDisplay(world())).toBe(renderDisplay(world()));
+  });
+});
+
+describe('renderViewport (M8 stand-in until M7 sprites)', () => {
+  it('shows the current room when not in combat, with the M7 hook', () => {
+    const html = renderViewport(world());
+    expect(html).toContain('Entry Hall');
+    expect(html).toContain('data-viewport'); // M7 fills this with the sprite
+    expect(html).toContain('[sprite arrives with M7]');
+  });
+
+  it('shows the faced mob (name + HP) during combat', () => {
+    const d = DungeonSchema.parse({
+      combat: {
+        active: true,
+        mobs: [{ id: 'drowned_01', type: 'drowned', name: 'Drowned Thrall', hp_cur: 5, hp_max: 12 }],
+      },
+    });
+    const html = renderViewport(d);
+    expect(html).toContain('Drowned Thrall');
+    expect(html).toContain('HP 5/12');
+    expect(html).toContain('Facing');
+  });
+});

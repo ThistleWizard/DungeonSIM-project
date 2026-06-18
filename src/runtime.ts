@@ -26,6 +26,7 @@ import { type Dungeon, emptyDungeon, ROOT_KEY } from './schema.js';
 import { baselineBefore, type Timeline } from './rewind.js';
 import { makeStore, processMessage, renderInjection, writeDungeon, type VariableStore } from './store.js';
 import { bootstrapCommands } from './commands.js';
+import { bootstrapDisplay } from './display.js';
 
 /** Shape of a Tavern Helper prompt injection (subset of its InjectionPrompt we use). */
 export interface InjectPrompt {
@@ -73,6 +74,9 @@ export interface Runtime {
   onMessageSwiped: (messageId: number) => void;
   /** Restore the new tail's snapshot after a deletion. */
   onMessageDeleted: (messageId: number) => void;
+  /** Register a listener fired after every state-changing refresh (turns AND rewind). The
+   *  live display panel (M8) hooks here so it can never disagree with the chat. */
+  onRefresh: (fn: () => void) => void;
 }
 
 /** Stable id so re-injecting overwrites the previous block instead of stacking. */
@@ -92,6 +96,8 @@ const SKIP_RECEIVED_TYPES = new Set(['quiet', 'impersonate', 'continue', 'append
  */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const warn = deps.warn ?? (() => {});
+  // Listeners fired after every state-changing refresh (per-turn apply + every rewind path).
+  const refreshListeners: Array<() => void> = [];
 
   const refreshInjection = (): void => {
     deps.injectPrompts([
@@ -103,6 +109,13 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
         content: renderInjection(deps.store, warn),
       },
     ]);
+    for (const fn of refreshListeners) {
+      try {
+        fn();
+      } catch (err) {
+        warn(`[DungeonState] refresh listener failed: ${err}`);
+      }
+    }
   };
 
   const onMessageReceived = (messageId: number, type: string): ApplyResult | undefined => {
@@ -160,6 +173,7 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     onGenerationStarted,
     onMessageSwiped,
     onMessageDeleted,
+    onRefresh: fn => refreshListeners.push(fn),
   };
 }
 
@@ -220,7 +234,7 @@ function bootstrap(): void {
     };
 
     const te = g.tavern_events ?? {};
-    createRuntime({
+    const runtime = createRuntime({
       store,
       timeline,
       getMessageText,
@@ -237,8 +251,11 @@ function bootstrap(): void {
     });
     // M6+: register the player-facing view commands (/map, /character, /inventory).
     bootstrapCommands(store, warn);
+    // M8: mount the live Gold Box display panel and refresh it on every state change/rewind.
+    const refreshDisplay = bootstrapDisplay(store, warn);
+    if (refreshDisplay) runtime.onRefresh(refreshDisplay);
     console.info(
-      '[DungeonState] runtime initialised (chat-scope state, message-scope rewind, [CURRENT STATE] injection, /map /character /inventory).',
+      '[DungeonState] runtime initialised (chat-scope state, message-scope rewind, [CURRENT STATE] injection, /map /character /inventory, Gold Box display panel).',
     );
   } catch (err) {
     console.error('[DungeonState] failed to initialise:', err);

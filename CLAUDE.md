@@ -185,7 +185,20 @@ the TTRPG depth layer (§13).
   `/map`, `/character`, `/inventory`. Pulled forward so M8 is layout/CSS over proven renderers.
   `/spellbook` deferred (no spells field in the schema until the §13 class-cartridge layer).
   **Verified live in SillyTavern:** all three commands register and render correctly.
-- **Next: M7** — sprite system, **cache-first** (generate once per entity id, async + off the
+- **M8 done (Gold Box display panel, §14) — built + unit-tested; live-test pending.**
+  `src/display.ts`: pure `renderDisplay` (a 2×2 dashboard of Viewport · Map · Character ·
+  Inventory tiles, each reusing the existing renderers) + `renderViewport` (a live text
+  stand-in — current room, or faced mob in combat — carrying a `data-viewport` hook M7 fills
+  with the sprite). Container-responsive: wide panel → 2×2 quadrants; narrow dock/phone →
+  single column + tab bar. `bootstrapDisplay` (guarded) mounts a fixed right-rail into the
+  parent ST DOM via `$(sel, parent.document)`, registers a **"Display" input-bar widget**
+  (TH `replaceScriptButtons` + `eventOnButton`) + a `/display` toggle, persists on/off in
+  localStorage, default OFF (§14 hard requirement; reflows `#sheld` only when on). Lives every
+  turn AND every rewind: `createRuntime` gained an `onRefresh` listener registry fired inside
+  `refreshInjection`, and `bootstrap()` registers the panel's `refresh` there — so the panel
+  can never disagree with the chat (the §14 M5 dependency, free). Shared `src/style.ts`
+  (palette + `panel()` card) keeps all tiles identical; `sheet.ts` refactored onto it.
+- **Next: M7** — sprite system fills the M8 viewport's `data-viewport` hook. **Cache-first** (generate once per entity id, async + off the
   turn's critical path, reuse from cache; `hash(id)` seed is the regeneration recipe, not the
   consistency guarantee). Backend = hook ST's Image Generation extension via `triggerSlash('/sd …')`
   (inherits the user's configured Source — no backend code). Toggleable; location sprites deferred.
