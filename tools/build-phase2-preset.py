@@ -68,18 +68,21 @@ COMMAND GRAMMAR (one statement per line; paths are relative to the dungeon root 
   _.set('path', oldValue, newValue);//reason   -> change a value. oldValue MUST equal what [CURRENT STATE] shows (desync check).
   _.add('path', delta);//reason                 -> numeric change, e.g. _.add('player.hp.cur', -3). The script clamps bounds.
   _.insert('array', value);//reason             -> append an element to an array (inventory, a room's contents, combat.mobs).
-  _.remove('array', id);//reason                -> remove an element by its id from an array.
-  _.assign('path', partialObject);//reason      -> merge fields into an object; use for NEW rooms and for chargen seeding (skips the old-value check).
+  _.remove('array', id [, n]);//reason          -> remove an element by its id from an array; pass a count to use up N of a stacked item, e.g. _.remove('inventory', 'torch', 1). The script decrements qty and drops the entry at 0.
+  _.assign('path', partialObject);//reason      -> merge fields into an object; use for NEW rooms and for chargen seeding (skips the old-value check). Also merges fields into one array item by id: _.assign('inventory.<id>', {equipped:true}).
   _.unset('path');//reason                      -> delete an optional value (a cleared condition, an expired light source).
+
+ADDRESS ARRAY ITEMS BY ID: to change a FIELD on an element of an array, use its id (or a condition's name) as a path segment and the script resolves it for you - e.g. _.set('inventory.<id>.equipped', false, true), _.add('inventory.<id>.charges', -1), _.add('combat.mobs.<id>.hp_cur', -3). Use _.remove to spend/destroy a whole item (or decrement a stack); use an id-field path to flip equipped/worn, set charges/notes, etc. A path whose id is not present is rejected and logged - it never corrupts state.
 
 RULES (the script enforces these; a command that violates them is rejected and logged):
   1. NUMBERS: prefer _.add for HP/marks/charges/ticks so the script does the math and clamps. Use only the amount this turn's resolved events justify.
   2. MAP IS APPEND-ONLY & TOPOLOGY-LOCKED. Add a NEW room with _.assign('rooms.R##', {id:'R##',name:'...',descr:'...',exits:{},contents:[],visited:true}). Add a NEW exit with _.set('rooms.R##.exits.<dir>', null, {to:'R##',type:'<type>',state:'<state>'}); the script auto-writes the reciprocal edge. You may change an exit's STATE (e.g. _.set('rooms.R##.exits.<dir>.state', 'locked', 'open')). You may NEVER redirect or delete an exit, or change its type. Exit types: open, archway, door, portcullis, stairs_up, stairs_down, ladder, hole, crawlspace, secret. Exit states: open, closed, locked, barred, hidden, broken.
-  3. INVENTORY changes only via in-fiction events (take/drop/consume/break/gift): _.insert to gain, _.remove by id to lose. Quantities exact.
+  3. INVENTORY changes only via in-fiction events (take/drop/consume/break/gift): _.insert to gain a new item; _.remove by id (with a count for stacks) to lose or use up. Change a carried item's FIELDS in place by id: _.set('inventory.<id>.equipped', <old>, <new>), _.set('inventory.<id>.worn', ...), _.add('inventory.<id>.charges', -1). Quantities exact.
   4. ROOMS: an existing room's id/name/descr are immutable. Mutable: contents (items/corpses via _.insert/_.remove), exits.*.state, visited, effects.
   5. BESTIARY is append-only. The first time a mob TYPE appears, _.assign('bestiary.<type>', {sprite_fragment:'<8-15 word canonical visual>', hp_base:<n>, defense:<n>}). Never edit an existing entry.
   6. COMBAT: set combat.active true/false; manage combat.mobs as an array (_.insert to spawn, _.remove by id to kill/flee, _.add or _.set on a mob's hp_cur/status).
   7. OLD VALUE: every _.set's second argument is a confirmation - copy it from [CURRENT STATE]. A wrong guess is logged as a desync (the value is still applied).
+  8. LIGHT & TORCHES: the ACTIVE light source lives in `light` ({source, ticks_remaining}), NOT in inventory; a carried torch is an UNLIT spare. To LIGHT one: _.remove('inventory', 'torch', 1) to take a spare AND _.assign('light', {source:'torch', ticks_remaining:60}) - the lit torch is now the `light`, the remaining torches stay as spares. Tick it down each turn (TASK 6); at 0 it has guttered out - _.unset('light'), then relight a spare the same way if any remain. (Same pattern for a lantern, candle, or a Light cantrip: one active source in `light`, spares in inventory.)
 
 If nothing changed this turn (rare), emit an empty <UpdateDungeon></UpdateDungeon>.
 
@@ -87,7 +90,8 @@ EXAMPLE:
 <UpdateDungeon>
 _.add('player.hp.cur', -4);//drowned strike, solid hit
 _.set('rooms.R03.exits.east.state', 'locked', 'open');//forced the swollen door
-_.remove('inventory', 'torch_1');//burned out
+_.remove('inventory', 'torch', 1);//lit a torch - one spare consumed
+_.assign('light', {source:'torch', ticks_remaining:60});//it is now the active light source
 _.assign('rooms.R04', {id:'R04',name:'Flooded Nave',descr:'Black water to the knee, pillars lost in dark.',exits:{},contents:[],visited:true});//entered
 _.set('rooms.R03.exits.east', null, {to:'R04',type:'door',state:'open'});//passage east (reciprocal auto-written)
 _.add('meta.turn', 1);//tick

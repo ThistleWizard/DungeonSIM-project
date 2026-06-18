@@ -171,17 +171,16 @@ function guardBestiary(d: Dungeon, seg: string[], op: 'write' | 'unset'): Guard 
   return { allowed: true };
 }
 
-function guardWrite(d: Dungeon, path: string, value: unknown, op: 'write' | 'unset'): Guard {
-  const seg = _.toPath(path);
-  if (seg[0] === 'rooms') return guardRooms(d, seg, value, op);
-  if (seg[0] === 'bestiary') return guardBestiary(d, seg, op);
+function guardWrite(d: Dungeon, seg: (string | number)[], value: unknown, op: 'write' | 'unset'): Guard {
+  // rooms/bestiary paths are record-keyed (no array segments) → seg is all strings there.
+  if (seg[0] === 'rooms') return guardRooms(d, seg as string[], value, op);
+  if (seg[0] === 'bestiary') return guardBestiary(d, seg as string[], op);
   return { allowed: true };
 }
 
 /** Clamp known bounded numeric fields (invariant 3). Non-numbers pass through. */
-function clampForPath(d: Dungeon, path: string, value: unknown): unknown {
+function clampForPath(d: Dungeon, seg: (string | number)[], value: unknown): unknown {
   if (typeof value !== 'number') return value;
-  const seg = _.toPath(path);
   if (seg[0] === 'player' && seg[1] === 'hp' && seg[2] === 'cur') {
     const max = _.get(d, ['player', 'hp', 'max'], Number.POSITIVE_INFINITY) as number;
     return _.clamp(value, 0, max);
@@ -193,6 +192,48 @@ function clampForPath(d: Dungeon, path: string, value: unknown): unknown {
   return value;
 }
 
+/**
+ * Resolve a mutation path against the LIVE tree, turning id-keyed ARRAY segments into
+ * concrete indices so the model can address an array element (inventory item, combat mob,
+ * condition, quest, room content) by its `id` (or `name`, for conditions):
+ *   `inventory.torch.equipped`  -> ['inventory', 2, 'equipped']
+ *   `combat.mobs.drowned_01.hp_cur` -> ['combat', 'mobs', 0, 'hp_cur']
+ * Object/record segments pass through unchanged, so `rooms.R05.exits.north` is untouched and
+ * the §5 guards (which key off record paths) keep working. Returns null when an id segment
+ * lands on an array with no matching element — the verb then blocks with a clear note instead
+ * of corrupting the tree (which is what an unresolved `inventory[id:torch].qty` guess did).
+ */
+function resolvePath(d: Dungeon, path: string): (string | number)[] | null {
+  let segs: string[];
+  try {
+    segs = _.toPath(path);
+  } catch {
+    return null;
+  }
+  const concrete: (string | number)[] = [];
+  let node: unknown = d;
+  for (const seg of segs) {
+    if (Array.isArray(node)) {
+      const asIndex = Number(seg);
+      if (Number.isInteger(asIndex) && String(asIndex) === seg) {
+        concrete.push(asIndex);
+        node = node[asIndex];
+      } else {
+        const idx = node.findIndex(
+          el => _.isObject(el) && ((el as { id?: unknown }).id === seg || (el as { name?: unknown }).name === seg),
+        );
+        if (idx === -1) return null; // id/name not present in this array
+        concrete.push(idx);
+        node = node[idx];
+      }
+    } else {
+      concrete.push(seg);
+      node = node == null ? undefined : (node as Record<string, unknown>)[seg];
+    }
+  }
+  return concrete;
+}
+
 function applyReciprocal(d: Dungeon, recip: Reciprocal, ctx: Ctx): void {
   _.set(d, recip.path, recip.value);
   ctx.log(`${recip.path.join('.')}: auto-linked -> ${fmt(recip.value)}`);
@@ -202,11 +243,13 @@ function applyReciprocal(d: Dungeon, recip: Reciprocal, ctx: Ctx): void {
 
 function applySet(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const { path } = cmd;
+  const seg = resolvePath(d, path);
+  if (seg === null) return ctx.block(cmd, `set: no array item matching id/name in path '${path}'`);
   const newV = cmd.args[cmd.args.length - 1];
-  const guard = guardWrite(d, path, newV, 'write');
+  const guard = guardWrite(d, seg, newV, 'write');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
 
-  const stored = _.get(d, path);
+  const stored = _.get(d, seg);
   // Old-value confirmation: set emits [old, new]; compare claimed old to stored.
   // Treat null/undefined as equivalent — adding a brand-new path (e.g. a new exit)
   // reads back as `undefined`, but the preset grammar declares the old value as `null`;
@@ -216,8 +259,8 @@ function applySet(d: Dungeon, cmd: Command, ctx: Ctx): void {
   if (cmd.args.length >= 2 && !bothAbsent && !_.isEqual(stored, claimedOld)) {
     ctx.desync(cmd, stored, claimedOld);
   }
-  const finalV = clampForPath(d, path, newV);
-  _.set(d, path, finalV);
+  const finalV = clampForPath(d, seg, newV);
+  _.set(d, seg, finalV);
   ctx.log(`${path}: ${fmt(stored)} -> ${fmt(finalV)}${reasonSuffix(cmd)}`);
   if (guard.reciprocal) applyReciprocal(d, guard.reciprocal, ctx);
 }
@@ -226,24 +269,28 @@ function applyAdd(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const { path } = cmd;
   const delta = cmd.args[0];
   if (typeof delta !== 'number') return ctx.block(cmd, `add delta '${fmt(delta)}' is not a number`);
-  const guard = guardWrite(d, path, undefined, 'write');
+  const seg = resolvePath(d, path);
+  if (seg === null) return ctx.block(cmd, `add: no array item matching id/name in path '${path}'`);
+  const guard = guardWrite(d, seg, undefined, 'write');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
-  const stored = _.get(d, path);
+  const stored = _.get(d, seg);
   // Use-based growth starts from rank 0: a missing path is the first mark, so
   // treat undefined as 0 and let the delta initialise it. A stored value that
   // EXISTS but is non-numeric is a real type error — still block that.
   const baseVal = stored === undefined ? 0 : stored;
   if (typeof baseVal !== 'number') return ctx.block(cmd, `add target '${path}' is not a number (${fmt(stored)})`);
-  const finalV = clampForPath(d, path, baseVal + delta);
-  _.set(d, path, finalV);
+  const finalV = clampForPath(d, seg, baseVal + delta);
+  _.set(d, seg, finalV);
   ctx.log(`${path}: ${baseVal} -> ${finalV}${reasonSuffix(cmd)}`);
 }
 
 function applyRemove(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const { path } = cmd;
-  const guard = guardWrite(d, path, undefined, 'write');
+  const seg = resolvePath(d, path);
+  if (seg === null) return ctx.block(cmd, `remove: no array item matching id/name in path '${path}'`);
+  const guard = guardWrite(d, seg, undefined, 'write');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
-  const target = _.get(d, path);
+  const target = _.get(d, seg);
   if (!Array.isArray(target)) return ctx.block(cmd, `remove target '${path}' is not an array`);
   const id = cmd.args[0];
   const count = typeof cmd.args[1] === 'number' ? cmd.args[1] : 1;
@@ -268,20 +315,24 @@ function applyRemove(d: Dungeon, cmd: Command, ctx: Ctx): void {
 
 function applyUnset(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const { path } = cmd;
-  const guard = guardWrite(d, path, undefined, 'unset');
+  const seg = resolvePath(d, path);
+  if (seg === null) return ctx.block(cmd, `unset: no array item matching id/name in path '${path}'`);
+  const guard = guardWrite(d, seg, undefined, 'unset');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
-  if (!_.has(d, path)) return ctx.block(cmd, `unset: '${path}' not present`);
-  const stored = _.get(d, path);
-  _.unset(d, path);
+  if (!_.has(d, seg)) return ctx.block(cmd, `unset: '${path}' not present`);
+  const stored = _.get(d, seg);
+  _.unset(d, seg);
   ctx.log(`${path}: unset (was ${fmt(stored)})${reasonSuffix(cmd)}`);
 }
 
 function applyAssign(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const { path } = cmd;
+  const seg = resolvePath(d, path);
+  if (seg === null) return ctx.block(cmd, `${cmd.type}: no array item matching id/name in path '${path}'`);
   const value = cmd.args[cmd.args.length - 1];
-  const guard = guardWrite(d, path, value, 'write');
+  const guard = guardWrite(d, seg, value, 'write');
   if (!guard.allowed) return ctx.block(cmd, guard.reason!);
-  const target = _.get(d, path);
+  const target = _.get(d, seg);
   if (cmd.type === 'insert' && Array.isArray(target)) {
     target.push(value);
     ctx.log(`${path}: inserted ${fmt(value)}${reasonSuffix(cmd)}`);
@@ -291,8 +342,8 @@ function applyAssign(d: Dungeon, cmd: Command, ctx: Ctx): void {
     _.assign(target as object, value as object);
     ctx.log(`${path}: assigned ${fmt(value)}${reasonSuffix(cmd)}`);
   } else {
-    const stored = _.get(d, path);
-    _.set(d, path, value);
+    const stored = _.get(d, seg);
+    _.set(d, seg, value);
     ctx.log(`${path}: ${fmt(stored)} -> ${fmt(value)}${reasonSuffix(cmd)}`);
   }
   if (guard.reciprocal) applyReciprocal(d, guard.reciprocal, ctx);

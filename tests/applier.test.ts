@@ -25,6 +25,60 @@ const base = () =>
     },
   });
 
+describe('applyCommands — id-keyed array addressing', () => {
+  it('sets a field on an inventory item addressed by id', () => {
+    const r = applyCommands(base(), [cmd('set', 'inventory.key.equipped', [false, true], 'wield the key?')]);
+    const key = r.dungeon.inventory.find(i => i.id === 'key')!;
+    expect(key.equipped).toBe(true);
+    expect(r.blocked).toEqual([]);
+  });
+
+  it('decrements charges on a specific item via add', () => {
+    const d = DungeonSchema.parse({
+      inventory: [{ id: 'wand', name: 'Wand of Sparks', qty: 1, charges: 5 }],
+    });
+    const r = applyCommands(d, [cmd('add', 'inventory.wand.charges', [-1], 'zap')]);
+    expect(r.dungeon.inventory[0].charges).toBe(4);
+  });
+
+  it('assigns multiple fields to an item at once', () => {
+    const r = applyCommands(base(), [cmd('assign', 'inventory.torch', [{ equipped: true, notes: 'held aloft' }])]);
+    const torch = r.dungeon.inventory.find(i => i.id === 'torch')!;
+    expect(torch.equipped).toBe(true);
+    expect(torch.notes).toBe('held aloft');
+    expect(torch.qty).toBe(2); // untouched
+  });
+
+  it('blocks (does not corrupt) a path whose id is not present', () => {
+    const warns: string[] = [];
+    const r = applyCommands(base(), [cmd('set', 'inventory.flute.equipped', [null, true])], {
+      warn: m => warns.push(m),
+    });
+    expect(r.blocked).toHaveLength(1);
+    expect(r.dungeon.inventory).toHaveLength(2); // tree intact, no junk key created
+    expect((r.dungeon.inventory as any).flute).toBeUndefined();
+    expect(warns.join()).toMatch(/no array item matching/);
+  });
+
+  it('clamps mob hp addressed by mob id (resolution makes the clamp fire)', () => {
+    const d = DungeonSchema.parse({
+      combat: {
+        active: true,
+        mobs: [{ id: 'drowned_01', type: 'drowned', name: 'Drowned', hp_cur: 6, hp_max: 8 }],
+      },
+    });
+    const r = applyCommands(d, [cmd('add', 'combat.mobs.drowned_01.hp_cur', [-99])]);
+    expect(r.dungeon.combat.mobs[0].hp_cur).toBe(0); // clamped to [0, max], not -93
+  });
+
+  it('still consumes a stacked item via remove(id, n) — the torch idiom', () => {
+    const r = applyCommands(base(), [cmd('remove', 'inventory', ['torch', 1], 'lit one torch')]);
+    const torch = r.dungeon.inventory.find(i => i.id === 'torch')!;
+    expect(torch.qty).toBe(1);
+    expect(r.blocked).toEqual([]);
+  });
+});
+
 describe('applyCommands — purity & bookkeeping', () => {
   it('never mutates its input', () => {
     const input = base();
