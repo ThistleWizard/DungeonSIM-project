@@ -17,7 +17,7 @@
  * call the injected logger. Never throw, never corrupt the tree.
  */
 import _ from 'lodash';
-import type { Dungeon } from './schema.js';
+import type { Dungeon, Item } from './schema.js';
 import type { Command } from './types.js';
 
 export interface ApplyOptions {
@@ -349,6 +349,88 @@ function applyAssign(d: Dungeon, cmd: Command, ctx: Ctx): void {
   if (guard.reciprocal) applyReciprocal(d, guard.reciprocal, ctx);
 }
 
+// ---------- light economy (script-owned; the model never tracks ticks) ----------
+
+const isLitSource = (it: unknown): it is Item =>
+  _.isObject(it) && (it as Item).lit === true && typeof (it as Item).fuel === 'number';
+
+/** Every array that can hold a light-source Item: the pack + every room's floor. */
+function lightContainers(d: Dungeon): Item[][] {
+  const out: Item[][] = [];
+  if (Array.isArray(d.inventory)) out.push(d.inventory as Item[]);
+  for (const room of Object.values(d.rooms ?? {})) {
+    if (room && Array.isArray(room.contents)) out.push(room.contents as Item[]);
+  }
+  return out;
+}
+
+/** Player's current illumination, derived from any LIT source carried or in the current room. */
+function deriveLight(d: Dungeon): Dungeon['light'] {
+  const carried = (d.inventory ?? []).find(isLitSource);
+  const loc = d.player?.location;
+  const here = loc ? (d.rooms?.[loc]?.contents ?? []).find(isLitSource) : undefined;
+  const src = carried ?? here;
+  if (!src) return null;
+  return { source: src.name ?? 'light', ticks_remaining: src.fuel as number };
+}
+
+/**
+ * Deterministic light burn-down + derivation (the milestone of "the script does the math"):
+ * burn every LIT source by `turnDelta` (a torch burns whether carried, dropped, or left in
+ * another room); a source that reaches 0 is spent and removed. Then recompute the top-level
+ * `light` block from whatever is lit in the player's pack or current room. Strict: nothing lit
+ * → `light: null` (so snuffing genuinely goes dark). The model only flips `lit` and moves the
+ * torch around; it never writes ticks or `light`.
+ */
+function applyLight(d: Dungeon, turnDelta: number, ctx: Ctx): void {
+  if (turnDelta > 0) {
+    for (const arr of lightContainers(d)) {
+      for (let i = arr.length - 1; i >= 0; i--) {
+        const it = arr[i];
+        if (isLitSource(it)) {
+          it.fuel = Math.max(0, (it.fuel as number) - turnDelta);
+          if (it.fuel <= 0) {
+            arr.splice(i, 1);
+            ctx.log(`${it.name ?? it.id} burned out`);
+          }
+        }
+      }
+    }
+  }
+  d.light = deriveLight(d);
+}
+
+/**
+ * Relocate an array element between two array containers, preserving its full state — the
+ * primitive behind drop / pick up / stash. `_.move('inventory.torch_1', 'rooms.R05.contents')`.
+ * The object moves intact (a lit torch keeps its live, script-owned fuel), which is exactly why
+ * the model can't do this with remove+insert. Leaving a slot un-equips the item.
+ */
+function applyMove(d: Dungeon, cmd: Command, ctx: Ctx): void {
+  const fromPath = cmd.path;
+  const toPath = cmd.args[0];
+  if (typeof toPath !== 'string') return ctx.block(cmd, `move: destination path missing`);
+  const fromSeg = resolvePath(d, fromPath);
+  if (fromSeg === null || fromSeg.length === 0) return ctx.block(cmd, `move: source '${fromPath}' not found`);
+  const lastIdx = fromSeg[fromSeg.length - 1];
+  const parent = _.get(d, fromSeg.slice(0, -1));
+  if (typeof lastIdx !== 'number' || !Array.isArray(parent)) {
+    return ctx.block(cmd, `move: source '${fromPath}' is not an array element`);
+  }
+  const toSeg = resolvePath(d, toPath);
+  if (toSeg === null) return ctx.block(cmd, `move: destination '${toPath}' not found`);
+  const dest = _.get(d, toSeg);
+  if (!Array.isArray(dest)) return ctx.block(cmd, `move: destination '${toPath}' is not an array`);
+
+  const [item] = parent.splice(lastIdx, 1);
+  if (_.isObject(item)) {
+    (item as Item).equipped = false; // a dropped/stashed object isn't in a wield/wear slot
+    (item as Item).worn = false;
+  }
+  dest.push(item);
+  ctx.log(`moved ${fmt(_.isObject(item) ? (item as Item).id : item)}: ${fromPath} -> ${toPath}${reasonSuffix(cmd)}`);
+}
+
 /**
  * Apply a list of commands to a dungeon tree. Pure: the input is deep-cloned and
  * never mutated; the new tree is returned in `result.dungeon`.
@@ -397,12 +479,16 @@ export function applyCommands(input: Dungeon, commands: Command[], opts: ApplyOp
         applyAssign(d, cmd, ctx);
         break;
       case 'move':
-        // Semantics are underspecified (see extract-commands.spec.md); block
-        // cleanly rather than guess and corrupt the tree. Revisit if needed.
-        ctx.block(cmd, 'move is not supported yet');
+        applyMove(d, cmd, ctx);
         break;
     }
   }
+
+  // Script-owned light economy: burn lit sources by however many turns passed this update,
+  // then re-derive the authoritative `light` block. Runs once, after the model's mutations.
+  const oldTurn = typeof input.meta?.turn === 'number' ? input.meta.turn : 0;
+  const newTurn = typeof d.meta?.turn === 'number' ? d.meta.turn : oldTurn;
+  applyLight(d, Math.max(0, newTurn - oldTurn), ctx);
 
   return { dungeon: d, delta_log: d.delta_log, blocked, desync };
 }

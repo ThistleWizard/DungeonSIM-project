@@ -70,7 +70,8 @@ COMMAND GRAMMAR (one statement per line; paths are relative to the dungeon root 
   _.insert('array', value);//reason             -> append an element to an array (inventory, a room's contents, combat.mobs).
   _.remove('array', id [, n]);//reason          -> remove an element by its id from an array; pass a count to use up N of a stacked item, e.g. _.remove('inventory', 'torch', 1). The script decrements qty and drops the entry at 0.
   _.assign('path', partialObject);//reason      -> merge fields into an object; use for NEW rooms and for chargen seeding (skips the old-value check). Also merges fields into one array item by id: _.assign('inventory.<id>', {equipped:true}).
-  _.unset('path');//reason                      -> delete an optional value (a cleared condition, an expired light source).
+  _.unset('path');//reason                      -> delete an optional value (e.g. a cleared condition).
+  _.move('fromItemPath', 'toArrayPath');//reason -> relocate a whole OBJECT between containers, state intact. Drop: _.move('inventory.<id>', 'rooms.R##.contents'). Pick up: _.move('rooms.R##.contents.<id>', 'inventory'). Use this (not remove+insert) so a lit torch keeps its live, script-tracked fuel.
 
 ADDRESS ARRAY ITEMS BY ID: to change a FIELD on an element of an array, use its id (or a condition's name) as a path segment and the script resolves it for you - e.g. _.set('inventory.<id>.equipped', false, true), _.add('inventory.<id>.charges', -1), _.add('combat.mobs.<id>.hp_cur', -3). Use _.remove to spend/destroy a whole item (or decrement a stack); use an id-field path to flip equipped/worn, set charges/notes, etc. A path whose id is not present is rejected and logged - it never corrupts state.
 
@@ -78,11 +79,11 @@ RULES (the script enforces these; a command that violates them is rejected and l
   1. NUMBERS: prefer _.add for HP/marks/charges/ticks so the script does the math and clamps. Use only the amount this turn's resolved events justify.
   2. MAP IS APPEND-ONLY & TOPOLOGY-LOCKED. Add a NEW room with _.assign('rooms.R##', {id:'R##',name:'...',descr:'...',exits:{},contents:[],visited:true}). Add a NEW exit with _.set('rooms.R##.exits.<dir>', null, {to:'R##',type:'<type>',state:'<state>'}); the script auto-writes the reciprocal edge. You may change an exit's STATE (e.g. _.set('rooms.R##.exits.<dir>.state', 'locked', 'open')). You may NEVER redirect or delete an exit, or change its type. Exit types: open, archway, door, portcullis, stairs_up, stairs_down, ladder, hole, crawlspace, secret. Exit states: open, closed, locked, barred, hidden, broken.
   3. INVENTORY changes only via in-fiction events (take/drop/consume/break/gift): _.insert to gain a new item; _.remove by id (with a count for stacks) to lose or use up. Change a carried item's FIELDS in place by id: _.set('inventory.<id>.equipped', <old>, <new>), _.set('inventory.<id>.worn', ...), _.add('inventory.<id>.charges', -1). Quantities exact.
-  4. ROOMS: an existing room's id/name/descr are immutable. Mutable: contents (items/corpses via _.insert/_.remove), exits.*.state, visited, effects.
+  4. ROOMS: an existing room's id/name/descr are immutable. Mutable: contents, exits.*.state, visited, effects. A room's `contents` is a real container of OBJECTS (the same shape as inventory items) - dropped gear, a corpse and its loot, a disarmed trap, a torch left burning on the floor. Add/remove with _.insert/_.remove; relocate between a room and the pack with _.move.
   5. BESTIARY is append-only. The first time a mob TYPE appears, _.assign('bestiary.<type>', {sprite_fragment:'<8-15 word canonical visual>', hp_base:<n>, defense:<n>}). Never edit an existing entry.
   6. COMBAT: set combat.active true/false; manage combat.mobs as an array (_.insert to spawn, _.remove by id to kill/flee, _.add or _.set on a mob's hp_cur/status).
   7. OLD VALUE: every _.set's second argument is a confirmation - copy it from [CURRENT STATE]. A wrong guess is logged as a desync (the value is still applied).
-  8. LIGHT & TORCHES: the ACTIVE light source lives in `light` ({source, ticks_remaining}), NOT in inventory; a carried torch is an UNLIT spare. To LIGHT one: _.remove('inventory', 'torch', 1) to take a spare AND _.assign('light', {source:'torch', ticks_remaining:60}) - the lit torch is now the `light`, the remaining torches stay as spares. Tick it down each turn (TASK 6); at 0 it has guttered out - _.unset('light'), then relight a spare the same way if any remain. (Same pattern for a lantern, candle, or a Light cantrip: one active source in `light`, spares in inventory.)
+  8. LIGHT IS SCRIPT-OWNED. A torch/lantern/candle is an ITEM with `lit` (is it burning?) and `fuel` (ticks of burn left). The script burns fuel down every turn, removes a spent source, and DERIVES the [CURRENT STATE] `Light:` line from whatever is lit in your pack or current room. You NEVER write `light`, `fuel`, or ticks. You only narrate and flip state: LIGHT one with _.set('inventory.<id>.lit', false, true); SNUFF with _.set('inventory.<id>.lit', true, false) (its fuel freezes); RELIGHT the same item later and it resumes from the fuel it had left. DROP a lit torch with _.move - it keeps burning on the floor and lights that room until it dies. When [CURRENT STATE] shows no active Light, the player is in DARKNESS.
 
 If nothing changed this turn (rare), emit an empty <UpdateDungeon></UpdateDungeon>.
 
@@ -90,8 +91,7 @@ EXAMPLE:
 <UpdateDungeon>
 _.add('player.hp.cur', -4);//drowned strike, solid hit
 _.set('rooms.R03.exits.east.state', 'locked', 'open');//forced the swollen door
-_.remove('inventory', 'torch', 1);//lit a torch - one spare consumed
-_.assign('light', {source:'torch', ticks_remaining:60});//it is now the active light source
+_.set('inventory.torch_1.lit', false, true);//struck and lit a torch (script tracks its fuel + the Light line)
 _.assign('rooms.R04', {id:'R04',name:'Flooded Nave',descr:'Black water to the knee, pillars lost in dark.',exits:{},contents:[],visited:true});//entered
 _.set('rooms.R03.exits.east', null, {to:'R04',type:'door',state:'open'});//passage east (reciprocal auto-written)
 _.add('meta.turn', 1);//tick
@@ -115,7 +115,7 @@ TASK 2 - READ STATE: Load the [CURRENT STATE] block as canonical truth (location
 TASK 3 - PARSE COMMAND: Interpret the player's input per <command_grammar>. Identify: action(s), targets, validity against [CURRENT STATE] (does the player HAVE that item? does that exit EXIST?). If invalid, the world responds truthfully (the door you remember is not there; your pack holds no rope). If ambiguous, prepare a one-line bracketed clarification and a minimal turn.
 TASK 4 - RESOLVE: Apply <action_resolution_engine> for risky actions (compute DC, check total, degree). If combat is active or begins, apply <combat_engine>: player attack, then each mob's action with offsets, damage, morale. When the dungeon INTRODUCES mobs unprompted, size the encounter via <encounter_budget> (telegraph + escape route if above routine); player-PROVOKED danger is uncapped. Apply <death_and_injury> for any 0-HP results.
 TASK 5 - EVENT / TIME-SKIP: If the command is an extended/repeated action (rest, thorough search, watch, multi-room travel), resolve it via <extended_action_protocol> using event_d20 as the single interruption roll, then skip to TASK 7. Otherwise consult <dungeon_event_table> with event_d20 normally; respect combat restrictions.
-TASK 6 - WORLD LOGIC: Movement and topology per <room_and_movement_protocol> (topology lock, room render needed?). Tick the turn counter, light sources, timed effects. LIGHTING: consult [CURRENT STATE]'s Light. If no source is active (absent, or ticks_remaining 0), the player is in DARKNESS - narrate only what is heard / smelled / felt, never room visuals or the identities of objects, and conceal room contents. Tick an active light source down by 1; a source that reaches 0 this turn is SPENT - emit _.unset('light') and the scene goes dark from that moment. Mob/NPC autonomous behavior consistent with their motives and the noise the player made.
+TASK 6 - WORLD LOGIC: Movement and topology per <room_and_movement_protocol> (topology lock, room render needed?). Tick the turn counter and timed effects. LIGHT IS SCRIPT-OWNED: never tick or write light/fuel - just advance meta.turn and the script burns lit sources down and recomputes the Light line. LIGHTING: consult [CURRENT STATE]'s Light. If no source is active, the player is in DARKNESS - narrate only what is heard / smelled / felt, never room visuals or the identities of objects, and conceal room contents. If [CURRENT STATE] shows a torch just burned out (gone from inventory, Light now none), narrate it guttering to ash. Mob/NPC autonomous behavior consistent with their motives and the noise the player made.
 TASK 7 - STATE MUTATIONS: Enumerate every state delta this turn caused (HP, items, marks, rooms discovered, exit/door states, bestiary additions, combat tracker, turn/light ticks) and express each as a command per <mutation_protocol>. Prefer _.add for numbers; copy each _.set's old value from [CURRENT STATE]. Do not transcribe unchanged state. These become the <UpdateDungeon> block.
 TASK 8 - SKILL/LEVEL: Award marks per <skill_advancement> for qualifying successes (emit them as _.add on the skill's marks; let the script roll marks into rank-ups). Check level-ups; prepare system-voice lines.
 TASK 9 - SPRITE GATE: Check <sprite_protocol> triggers. If firing, retrieve or compose the canonical fragment (bestiary first!).
@@ -153,8 +153,10 @@ Announce the character in a short system-voice summary (stats visible here, once
   _.assign('meta', {turn:1});//start
   _.assign('player', {name:'<Name>',class:'<Class>',level:1,hp:{cur:<max>,max:<max>},defense:<n>,stats:{str:<n>,dex:<n>,con:<n>,int:<n>,wis:<n>,cha:<n>},skills:{<Skill>:{rank:1,marks:0,marks_needed:5}, ...},conditions:[],location:'R01'});//chargen
   _.insert('inventory', {id:'<snake_id>',name:'<Name>',qty:<n>,equipped:<bool>});//one per kit item
+  // Light sources do NOT stack - seed each torch/lantern/candle as its OWN item with a unique id and `fuel` (ticks): torch 60, lantern 120, candle 40. They start unlit.
+  _.insert('inventory', {id:'torch_1',name:'Torch',fuel:60,lit:false});//and torch_2, torch_3, ... one per torch
   _.assign('rooms.R01', {id:'R01',name:'<Room Name>',descr:'<short>',exits:{},contents:[],visited:true});//first room
-  _.assign('light', {source:'torch',ticks_remaining:60});//only if a light was lit
+  // Light is DERIVED by the script - never seed a `light` object. If the character begins with a torch already lit, just flip it: _.set('inventory.torch_1.lit', false, true);
 
 Universal_Skills_List: Melee, Ranged, Athletics, Stealth, Lockpicking, Perception, Arcana, Divinity, Lore, Medicine, Survival, Persuasion. Untrained = rank 0 (no bonus). Scenario cards may add skills.
 </chargen_protocol>"""

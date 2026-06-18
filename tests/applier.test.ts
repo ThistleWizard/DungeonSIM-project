@@ -241,12 +241,82 @@ describe('invariant 2 — inventory legality', () => {
 });
 
 describe('other verbs', () => {
-  it('unsets a non-protected path', () => {
-    const r = applyCommands(base(), [cmd('unset', 'light', [], 'lantern died')]);
-    expect(r.dungeon.light).toBeUndefined();
+  it('unsets a non-protected path (id-resolved)', () => {
+    const r = applyCommands(base(), [cmd('unset', 'inventory.key.notes', [], 'clear note')]);
+    expect(r.dungeon.inventory.find(i => i.id === 'key')!.notes).toBeUndefined();
     expect(r.blocked).toHaveLength(0);
   });
-  it('blocks unsupported move', () => {
-    expect(applyCommands(base(), [cmd('move', 'inventory', ['a', 'b'])]).blocked).toHaveLength(1);
+});
+
+describe('light economy (script-owned) + move', () => {
+  const lit = () =>
+    DungeonSchema.parse({
+      meta: { turn: 0 },
+      player: { location: 'R01' },
+      inventory: [
+        { id: 'torch_1', name: 'Torch', fuel: 60, lit: true },
+        { id: 'torch_2', name: 'Torch', fuel: 60, lit: false },
+      ],
+      rooms: { R01: { id: 'R01', name: 'Cell', contents: [] } },
+    });
+
+  it('derives `light` from the lit carried torch (model never writes light)', () => {
+    const r = applyCommands(lit(), [cmd('add', 'meta.turn', [1])]);
+    expect(r.dungeon.light).toEqual({ source: 'Torch', ticks_remaining: 59 }); // burned 1 tick
+  });
+
+  it('burns fuel by the turn-delta, including a time-skip', () => {
+    const r = applyCommands(lit(), [cmd('add', 'meta.turn', [10])]);
+    expect(r.dungeon.inventory.find(i => i.id === 'torch_1')!.fuel).toBe(50);
+  });
+
+  it('snuffing (lit→false) goes dark; relighting resumes from frozen fuel', () => {
+    const snuffed = applyCommands(lit(), [
+      cmd('set', 'inventory.torch_1.lit', [true, false]),
+      cmd('add', 'meta.turn', [1]),
+    ]);
+    expect(snuffed.dungeon.light).toBeNull(); // genuinely dark
+    expect(snuffed.dungeon.inventory.find(i => i.id === 'torch_1')!.fuel).toBe(60); // frozen, not ticked
+    const relit = applyCommands(snuffed.dungeon, [
+      cmd('set', 'inventory.torch_1.lit', [false, true]),
+      cmd('add', 'meta.turn', [1]),
+    ]);
+    expect(relit.dungeon.light).toEqual({ source: 'Torch', ticks_remaining: 59 });
+  });
+
+  it('a torch that burns to 0 is spent and removed, and the scene goes dark', () => {
+    const d = DungeonSchema.parse({
+      meta: { turn: 0 },
+      player: { location: 'R01' },
+      inventory: [{ id: 'torch_1', name: 'Torch', fuel: 3, lit: true }],
+      rooms: { R01: { id: 'R01', name: 'Cell', contents: [] } },
+    });
+    const r = applyCommands(d, [cmd('add', 'meta.turn', [5])]);
+    expect(r.dungeon.inventory).toHaveLength(0);
+    expect(r.dungeon.light).toBeNull();
+  });
+
+  it('move relocates a lit torch to the room floor, fuel intact, and it still lights the room', () => {
+    const r = applyCommands(lit(), [
+      cmd('move', 'inventory.torch_1', ['rooms.R01.contents'], 'set it down'),
+      cmd('add', 'meta.turn', [1]),
+    ]);
+    expect(r.dungeon.inventory.find(i => i.id === 'torch_1')).toBeUndefined(); // left the pack
+    const onFloor = r.dungeon.rooms.R01.contents.find(i => i.id === 'torch_1')!;
+    expect(onFloor.lit).toBe(true);
+    expect(onFloor.fuel).toBe(59); // still burning on the floor
+    expect(r.dungeon.light).toEqual({ source: 'Torch', ticks_remaining: 59 }); // lights the room you're in
+  });
+
+  it('move un-equips the object and blocks a non-array destination', () => {
+    const d = DungeonSchema.parse({
+      player: { location: 'R01' },
+      inventory: [{ id: 'mace', name: 'Mace', equipped: true }],
+      rooms: { R01: { id: 'R01', name: 'Cell', contents: [] } },
+    });
+    const ok = applyCommands(d, [cmd('move', 'inventory.mace', ['rooms.R01.contents'])]);
+    expect(ok.dungeon.rooms.R01.contents.find(i => i.id === 'mace')!.equipped).toBe(false);
+    const bad = applyCommands(d, [cmd('move', 'inventory.mace', ['rooms.R01'])]);
+    expect(bad.blocked).toHaveLength(1); // destination is not an array
   });
 });

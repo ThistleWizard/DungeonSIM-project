@@ -227,4 +227,24 @@ Blocked invariants and old-value desyncs are pushed to `delta_log` (prefixed `[B
 `[DESYNC]`) and to an injectable `warn` logger; the tree is never corrupted and nothing throws.
 Runtime glue (event hooks reading/writing chat-scope vars) builds a `VariableStore` from
 `getVariables`/`replaceVariables` and calls `processMessage` — see the snippet at the top of
-`src/store.ts`. `move` is parsed but intentionally blocked at apply time (underspecified).
+`src/store.ts`.
+
+**Items, rooms-as-containers & the script-owned light economy (post-M8 engine work).**
+- `ItemSchema` is one unified object shape used by BOTH `player.inventory` and a room's
+  `contents` (rooms are real containers now) — so drop/pick-up is just relocating an object
+  between those arrays. Items carry `kind` (item/corpse/feature/trap), `equipped`/`worn`,
+  `charges`, and light-source `lit`/`fuel`. (`InventoryItemSchema`/`RoomContentSchema` are
+  back-compat aliases of `ItemSchema`.)
+- The applier resolves **id-keyed array paths** (`inventory.torch_1.lit`, `combat.mobs.<id>.
+  hp_cur`) → concrete index, so the model addresses any array element's field by id; an
+  unresolved id is blocked, never corrupts the tree.
+- **`move` is now implemented**: `_.move('inventory.torch_1', 'rooms.R05.contents')` relocates
+  an object between containers with its state intact (un-equipping it) — the primitive for
+  drop/stash/pick-up; the model can't do this with remove+insert because `fuel` is script-owned.
+- **Light is script-owned and derived**: a torch is an Item with `lit`+`fuel`; each turn
+  `applyCommands` burns every lit source by the `meta.turn` delta, removes spent ones, and
+  recomputes the top-level `light` block from whatever is lit in the player's pack or current
+  room (strict — nothing lit ⇒ `light: null`). The model NEVER writes `light`/`fuel`/ticks; it
+  only flips `lit` and moves the torch. This kills tick-drift and makes snuff/relight and
+  lay-down-while-it-keeps-burning work. (Migration: an in-progress save with a lit torch in the
+  old `light` block but no `lit` item goes dark next turn — relight it.)

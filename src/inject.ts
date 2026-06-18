@@ -53,6 +53,8 @@ export function formatStateBlock(d: Dungeon): string {
       it.equipped ? 'equipped' : '',
       it.worn ? 'worn' : '',
       it.charges != null ? `${it.charges} charges` : '',
+      // Light-source burn state (script-owned) so the model sees which torch is lit and its fuel.
+      it.fuel != null ? (it.lit ? `lit, ${it.fuel} left` : `unlit, ${it.fuel} fuel`) : '',
     ].filter(Boolean);
     if (tags.length) s += ` (${tags.join(', ')})`;
     return s;

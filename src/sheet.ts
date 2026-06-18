@@ -110,6 +110,8 @@ export function renderInventory(d: Dungeon): string {
         it.equipped ? 'equipped' : '',
         it.worn ? 'worn' : '',
         it.charges != null ? `${it.charges} charges` : '',
+        // Light-source burn state (script-owned): a clear lit/unlit indicator + remaining fuel.
+        it.fuel != null ? (it.lit ? `🔥 lit · ${it.fuel}` : `unlit · ${it.fuel}`) : '',
       ].filter(Boolean);
       const tagHtml = tags.length
         ? ` <span style="color:${C.accent};font-size:11px">[${tags.map(esc).join(' · ')}]</span>`

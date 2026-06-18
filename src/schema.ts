@@ -24,16 +24,31 @@ export const ConditionSchema = z.object({
   ticks: z.number().int().nullable(), // null = until-cured
 });
 
-export const InventoryItemSchema = z.object({
-  id: z.string(), // stable snake_case id, e.g. "rusty_key"
+// A world OBJECT. The SAME shape lives in `player.inventory` (carried) and in a room's
+// `contents` (on the floor) — "drop"/"pick up" is just moving the object between those two
+// arrays (see the `move` command), so its state (lit torch, charged wand, equipped blade)
+// rides along. `kind` distinguishes a portable item from a fixture/corpse/trap.
+export const ItemSchema = z.object({
+  id: z.string(), // stable snake_case id, e.g. "rusty_key", "torch_1"
   name: z.string(),
   qty: z.number().int().min(1).default(1),
+  kind: z.enum(['item', 'corpse', 'feature', 'trap']).default('item'),
   equipped: z.boolean().default(false),
   worn: z.boolean().default(false),
   notes: z.string().default(''),
   charges: z.number().int().nullable().default(null),
+  // Light-source burn state (script-owned). `fuel` = ticks of burn left; null = not a light
+  // source. `lit` = currently burning. The applier ticks fuel down each turn and derives the
+  // top-level `light` block from whatever is lit in the player's pack or current room — the
+  // model never writes ticks or `light`, only flips `lit` and moves the torch around.
+  fuel: z.number().int().min(0).nullable().default(null),
+  lit: z.boolean().default(false),
   seed: z.number().int().nullable().default(null), // sprite seed (M7), = hash(id)
 });
+
+// Back-compat aliases: the carried-vs-floor distinction is positional, not structural.
+export const InventoryItemSchema = ItemSchema;
+export const RoomContentSchema = ItemSchema;
 
 // An exit edge. `to` is a room id. `state` mutable; `to`/`type` are topology-locked.
 export const ExitSchema = z.object({
@@ -70,13 +85,6 @@ export const ExitSchema = z.object({
   lock_revealed: z.boolean().default(false),
 });
 
-export const RoomContentSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  qty: z.number().int().min(1).default(1),
-  kind: z.enum(['item', 'corpse', 'feature']).default('item'),
-});
-
 // `effects` reserved for the post-M3 TTRPG depth layer (design §13). Harmless now.
 export const RoomEffectSchema = z.object({
   name: z.string(),
@@ -92,7 +100,8 @@ export const RoomSchema = z.object({
   depth: z.number().int().min(1).default(1),
   descr: z.string().default(''),
   exits: z.record(z.string(), ExitSchema).default({}), // keyed by direction
-  contents: z.array(RoomContentSchema).default([]),
+  contents: z.array(ItemSchema).default([]), // floor objects: items, corpses, features, traps
+
   effects: z.array(RoomEffectSchema).default([]),
   visited: z.boolean().default(true),
 });
@@ -196,7 +205,8 @@ export const DungeonSchema = z.object({
 export type Dungeon = z.infer<typeof DungeonSchema>;
 export type Room = z.infer<typeof RoomSchema>;
 export type Exit = z.infer<typeof ExitSchema>;
-export type InventoryItem = z.infer<typeof InventoryItemSchema>;
+export type Item = z.infer<typeof ItemSchema>;
+export type InventoryItem = Item;
 export type CombatMob = z.infer<typeof CombatMobSchema>;
 
 /**
