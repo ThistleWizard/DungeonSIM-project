@@ -184,6 +184,7 @@ the TTRPG depth layer (§13).
   `registerView` + `registerAllCommands`; `bootstrapMapCommand` → `bootstrapCommands` registers
   `/map`, `/character`, `/inventory`. Pulled forward so M8 is layout/CSS over proven renderers.
   `/spellbook` deferred (no spells field in the schema until the §13 class-cartridge layer).
+  **Verified live in SillyTavern:** all three commands register and render correctly.
 - **Next: M7** — sprite system, **cache-first** (generate once per entity id, async + off the
   turn's critical path, reuse from cache; `hash(id)` seed is the regeneration recipe, not the
   consistency guarantee). Backend = hook ST's Image Generation extension via `triggerSlash('/sd …')`
