@@ -389,6 +389,20 @@ Add `threads` (array or record) per the shape above. The injection layer gains a
 
 After M7 fills the viewport, the shippable Gold Box core (M1–M8) is complete. (The pack-agnostic + content-cartridge + preset architecture also means the engine isn't D&D-specific — swap pack/preset/cartridges and it reskins to another genre; see the genre-reskin note in the someday-pile.)
 
+**M7 sprite-pack candidates (researched; user direction folded in).** Decided perspective split: **front-facing monster portraits for the VIEWPORT** (the Gold Box "a wight attacks!" combat-screen feel) + **item-icon sprites for the INVENTORY**. The glue for mixing sources cleanly is to standardize on the **DawnBringer-16 palette** (DawnLike and Lucky Bestiary both use DB16), so a front-facing bestiary and a top-down item set read as one. Pack-agnostic manifest makes the mix trivial: different sources, one tags index. Shortlist by license tier:
+- **CC0 (no attribution, fully shippable):**
+  - Kenney *Roguelike/RPG pack* — 1,700+ tiles 16×16, monsters+items+terrain, one coherent hand; the clean shippable DEFAULT. https://kenney.nl/assets/roguelike-rpg-pack (+ *Tiny Dungeon* https://kenney.nl/assets/tiny-dungeon, *Caves & Dungeons* https://kenney.nl/assets/roguelike-caves-dungeons)
+  - Dungeon Crawl Stone Soup tiles — 3,000+ at 32×32, the broadest roguelike bestiary + items; mostly CC0 BUT respect the "unknown license" exclusion list. https://github.com/crawl/tiles (preview https://opengameart.org/content/dungeon-crawl-32x32-tiles)
+  - 0x72 *DungeonTileset II* — CC0, 16×16, ANIMATED monsters/weapons; smaller roster, high quality. https://0x72.itch.io/dungeontileset-ii
+- **CC-BY (free, one-line credit) — best for the ITEM-ICON half:**
+  - DawnLike — CC-BY 4.0 (credit DragonDePlatino + DawnBringer). 16×16, DB16 palette, NetHack-built, huge item+monster+terrain coverage. The named-sprite atlas (https://github.com/tommyettinger/DawnLikeAtlas) maps almost 1:1 onto our tag manifest (the sprite names ARE tags). Main: https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181
+- **Cheap paid — best for the front-facing VIEWPORT half:**
+  - Lucky Bestiary ($5+) — 100 monsters, FRONT-FACING (enemies face the player), DB16 palette; closest to the Gold Box combat portrait. Royalty-free for use; raw-asset redistribution not spelled out (fine embedded in the build). https://luckycassette.itch.io/lucky-bestiary
+  - Oryx *Ultimate Roguelike* ($5) — royalty-free + source; 16×24 recolorable, animated heroes/monsters/items/UI; the most unified single-artist look. https://www.oryxdesignlab.com/products/p/ultimate-roguelike-tileset
+  - More front-facing to eyeball (verify licenses): MEGA Fantasy Pixel Monster Pack https://koji-marumugi.itch.io/mega-fantasy-pixel-monster-pack ; 32 RPG Monsters https://proassets-ia.itch.io/32-rpg-monsters-16-bit-pixel-art-sprite-pack-for-retro-games
+
+  **Working plan:** DawnLike for item icons (inventory) + a front-facing DB16 bestiary (Lucky Bestiary the leading candidate) for the viewport; Kenney Roguelike/RPG as the CC0 shippable fallback. Gold Box rips remain a local-only personal option the pack-agnostic system supports but the shipped build must not bundle.
+
 **The shippable v1 target (the line that defines "done"):** character lifecycle (chargen→descent→permadeath, working) + authoritative state (M1–M5, done) + Gold Box four-panel view (M6→M7→M8) + content polish so a stranger gets it unaided. Everything below is v1.1+ richness, deliberately deferred:
 
 - **§13 conditional-injection / content-cartridge architecture** — the unifying system for expandable depth: per-class rules cartridges (cantrips, spells, abilities), location cartridges (regional bestiary/loot/factions, e.g. dwarven_mines), within-cartridge branching via schema state, lock/portal gameplay as triggered cartridges. Build the SYSTEM post-M8; ship with class flavor + ONE polished region; full library is v1.1+. Additive token cost: context scales with where you are, not how much game exists.
