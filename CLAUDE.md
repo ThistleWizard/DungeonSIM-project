@@ -178,7 +178,17 @@ the TTRPG depth layer (§13).
   `lock_revealed` (discoverable locks), and room `depth`. These make portals/branches/locks
   *representable*; their gameplay stays deferred (§13/§15). **Verified live in SillyTavern:**
   `/map` registers and renders an accurate current-depth automap in the running app.
-- **Next: M7** — sprite seed-locking (design §8).
+- **M8 prep done (sheet/inventory renderers)** — `src/sheet.ts` (`renderSheet`, `renderInventory`,
+  pure): full structured Gold Box character sheet + inventory as styled HTML, straight from
+  `player.*` / `inventory[]` (same anti-drift move as the map). `src/commands.ts` generalised to
+  `registerView` + `registerAllCommands`; `bootstrapMapCommand` → `bootstrapCommands` registers
+  `/map`, `/character`, `/inventory`. Pulled forward so M8 is layout/CSS over proven renderers.
+  `/spellbook` deferred (no spells field in the schema until the §13 class-cartridge layer).
+- **Next: M7** — sprite system, **cache-first** (generate once per entity id, async + off the
+  turn's critical path, reuse from cache; `hash(id)` seed is the regeneration recipe, not the
+  consistency guarantee). Backend = hook ST's Image Generation extension via `triggerSlash('/sd …')`
+  (inherits the user's configured Source — no backend code). Toggleable; location sprites deferred.
+  See design §15 for the full plan.
 
 ### The preset fork
 
