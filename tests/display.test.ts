@@ -11,6 +11,7 @@ import { DungeonSchema } from '../src/schema.js';
 function world() {
   return DungeonSchema.parse({
     meta: { depth: 1 },
+    light: { source: 'Torch', ticks_remaining: 30 }, // lit → the viewport scene shows the room
     player: { name: 'Bramble', class: 'Cleric', location: 'R01', hp: { cur: 9, max: 16 } },
     rooms: { R01: { id: 'R01', name: 'Entry Hall', depth: 1, exits: {} } },
     inventory: [{ id: 'mace', name: 'Iron Mace', equipped: true }],
@@ -25,8 +26,8 @@ describe('renderDisplay (M8)', () => {
     expect(html).toContain('Bramble'); // character sheet
     expect(html).toContain('9 / 16'); // sheet HP
     expect(html).toContain('Iron Mace'); // inventory
-    expect(html).toContain('VIEWPORT'); // viewport tile
-    expect(html).toContain('Entry Hall'); // viewport stand-in shows the current room
+    expect(html).toContain('Viewport'); // viewport tile (panel title; CSS uppercases it)
+    expect(html).toContain('Entry Hall'); // viewport scene caption shows the current (lit) room
   });
 
   it('emits the responsive chrome: scoped style, a 2×2 container query, tab bar + tiles', () => {
@@ -71,15 +72,17 @@ describe('renderDisplay (M8)', () => {
 });
 
 describe('renderViewport (M8 stand-in until M7 sprites)', () => {
-  it('shows the current room when not in combat, with the M7 hook', () => {
+  it('shows the current room when not in combat, with the M7 sprite slot', () => {
     const html = renderViewport(world());
     expect(html).toContain('Entry Hall');
-    expect(html).toContain('data-viewport'); // M7 fills this with the sprite
-    expect(html).toContain('[sprite arrives with M7]');
+    expect(html).toContain('data-viewport'); // the scene window
+    expect(html).toContain('data-sprite-slot'); // M7 fills this with the sprite
+    expect(html).toContain('[sprite: M7]');
   });
 
   it('shows the faced mob (name + HP) during combat', () => {
     const d = DungeonSchema.parse({
+      light: { source: 'Torch', ticks_remaining: 30 }, // lit → mob is visible (dark would conceal)
       combat: {
         active: true,
         mobs: [{ id: 'drowned_01', type: 'drowned', name: 'Drowned Thrall', hp_cur: 5, hp_max: 12 }],
@@ -88,7 +91,11 @@ describe('renderViewport (M8 stand-in until M7 sprites)', () => {
     const html = renderViewport(d);
     expect(html).toContain('Drowned Thrall');
     expect(html).toContain('HP 5/12');
-    expect(html).toContain('Facing');
+  });
+
+  it('conceals the scene in darkness (no light source)', () => {
+    const html = renderViewport(DungeonSchema.parse({ player: { location: 'R01' } }));
+    expect(html).toContain('You stand in darkness.');
   });
 
   it('does NOT throw on a malformed mob (undefined name, array status) — a render crash here froze the live panel', () => {

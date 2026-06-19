@@ -145,7 +145,7 @@ describe('renderMap current-room highlight (M6 §B4)', () => {
   it('marks only the current room with the amber @ YOU tag', () => {
     const svg = renderMap(loop7(), 'R03', 1);
     expect(svg).toContain('@ YOU');
-    expect(svg).toContain('#e8c468'); // amber highlight present
+    expect(svg).toContain('#f0d878'); // amber highlight present
     // Exactly one YOU tag.
     expect(svg.match(/@ YOU/g)?.length).toBe(1);
   });

@@ -48,28 +48,72 @@ const DISPLAY_STYLE =
   `.ds-display .ds-tabs{display:none}}` +
   `</style>`;
 
-/** The viewport tile. Until M7 sprites land, a live text stand-in (current scene / combat). */
+/**
+ * Pick a background tint from the room's name/type. Cheap, deterministic, and a stand-in
+ * until real background art exists. Extend the keyword map freely (or swap to per-room art
+ * keys at M7).
+ */
+function sceneTint(d: Dungeon): { top: string; bottom: string; label: string } {
+  const room = d.player?.location ? d.rooms?.[d.player.location] : undefined;
+  const name = (room?.name ?? '').toLowerCase();
+  if (/crypt|tomb|grave|bone|drowned/.test(name)) return { top: '#101622', bottom: '#1a2230', label: room?.name ?? '' };
+  if (/water|flood|cistern|seep/.test(name)) return { top: '#0a1822', bottom: '#12303a', label: room?.name ?? '' };
+  if (/shrine|altar|reliquary|temple|ash/.test(name)) return { top: '#1a1020', bottom: '#2a1828', label: room?.name ?? '' };
+  if (/cavern|cave|mine|tunnel/.test(name)) return { top: '#181410', bottom: '#241c12', label: room?.name ?? '' };
+  return { top: '#10101c', bottom: C.stone, label: room?.name ?? 'the dark' };
+}
+
+/**
+ * The viewport tile — a Gold Box SCENE WINDOW: a framed diorama with a room-typed background
+ * and a positioned sprite SLOT (`data-sprite-slot`) that M7 fills. Until then it shows a
+ * tinted scene + a text caption (faced mob in combat, else the room), which already reads as
+ * a "scene" not a "readout". Lighting governs it: dark ⇒ black void + "you stand in darkness".
+ */
 export function renderViewport(d: Dungeon): string {
-  let body: string;
-  if (d.combat?.active && d.combat.mobs?.length) {
-    const mobs = d.combat.mobs
-      .map(m => {
-        const statusText = typeof m.status === 'string' ? m.status : '';
-        const status = statusText ? ` <span style="color:${C.dim}">${esc(statusText)}</span>` : '';
-        const name = m.name || m.type || 'creature'; // tolerate a malformed mob missing its name
-        return `<div>${esc(name)} <span style="color:${C.dim}">HP ${m.hp_cur}/${m.hp_max}</span>${status}</div>`;
-      })
-      .join('');
-    body = `<div style="color:${C.hp};margin-bottom:4px">⚔ Facing</div>${mobs}`;
+  const inCombat = !!(d.combat?.active && d.combat.mobs?.length);
+  const { top, bottom, label } = sceneTint(d);
+  const dark = !d.light; // [CURRENT STATE] light derivation: null => darkness
+  const sceneBg = dark ? `background:#050507` : `background:linear-gradient(${top},${bottom})`;
+
+  let caption: string;
+  let captionColor: string = C.text;
+  if (dark) {
+    caption = 'You stand in darkness.';
+    captionColor = C.dim;
+  } else if (inCombat) {
+    const m = d.combat!.mobs[0];
+    const name = m.name || m.type || 'creature'; // tolerate a malformed mob missing its name
+    const statusText = typeof m.status === 'string' ? m.status : '';
+    caption = `${esc(name)} — HP ${m.hp_cur}/${m.hp_max}${statusText ? ` (${esc(statusText)})` : ''}`;
+    captionColor = C.hp;
   } else {
-    const room = d.player?.location ? d.rooms?.[d.player.location] : undefined;
-    body = `<div style="color:${C.text}">${room ? esc(room.name) : 'the dark'}</div>`;
+    caption = esc(label);
   }
-  const inner =
-    `<div data-viewport style="text-align:center;padding:14px 8px">` +
-    body +
-    `<div style="color:${C.dim};font-size:10px;margin-top:10px">[sprite arrives with M7]</div></div>`;
-  return panel('VIEWPORT', inner, { fill: true, maxWidth: null });
+
+  // faux floor grid (subtle vertical lines toward a horizon) — pure decoration, hidden in dark
+  const floor = dark
+    ? ''
+    : `<div style="position:absolute;left:0;right:0;bottom:0;height:34%;` +
+      `background:repeating-linear-gradient(90deg,transparent 0 21px,${C.frameDk}55 21px 22px);` +
+      `border-top:1px solid ${C.frameDk}"></div>`;
+
+  // SPRITE SLOT — empty now; M7 fills this with the current mob/scene sprite <img>/<svg>.
+  const spriteLayer =
+    `<div data-sprite-slot style="position:absolute;left:50%;bottom:34%;transform:translateX(-50%);` +
+    `display:flex;align-items:flex-end;justify-content:center;min-height:0">` +
+    (dark ? '' : `<div style="color:${C.dim};font-size:10px;padding-bottom:8px">[sprite: M7]</div>`) +
+    `</div>`;
+
+  const scene =
+    `<div data-viewport style="position:relative;width:100%;aspect-ratio:4/3;${sceneBg};` +
+    `border:2px solid ${C.frameDk};box-shadow:inset 0 0 12px rgba(0,0,0,.6);overflow:hidden">` +
+    floor +
+    spriteLayer +
+    `<div style="position:absolute;left:0;right:0;bottom:0;background:${C.frameDk}cc;` +
+    `text-align:center;padding:4px 6px;font-size:12px;color:${captionColor}">${caption}</div>` +
+    `</div>`;
+
+  return panel('Viewport', scene, { fill: true, maxWidth: null });
 }
 
 export interface DisplayOptions {
