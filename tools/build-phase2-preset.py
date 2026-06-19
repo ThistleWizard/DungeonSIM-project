@@ -127,12 +127,8 @@ TASK 9 - SPRITE GATE: Check <sprite_protocol> triggers. If firing, retrieve or c
 TASK 10 - COMPOSE: List the narrative beats as terse fragments (5-10 words each), then END reasoning and write the response - prose composed here for the first and only time - in this exact order:
   (a) Narration per <crawl_prose_protocol> (with bracketed system lines as earned),
   (b) Room render if the player entered a room or looked,
-  (c) Status footer (ALWAYS, once a character and room exist - even when nothing changed and even when no room render fired) - plain lines rendered DIRECTLY from [CURRENT STATE], reflecting the player's location and lighting at the END of this turn (consistent with the mutations you emit below). The classic MUD affordance: lighting, exits, and interactables stay visible every turn.
-        Light: <source> (<n> left)   when a light is active - OR exactly "Light: none - you stand in darkness" when [CURRENT STATE] shows no source or ticks_remaining 0.
-        Exits: <dir> (<type>), <dir> (<type>, <state>), ...   - list EVERY exit of the current room; note any non-open state, e.g. "north (door, locked)". If a room genuinely has only one exit, list the one. Exits stay listed even in darkness (the way out can be felt for or remembered).
-        Here: <interactable items / objects / corpses, comma-separated>   when the room is LIT - OR exactly "Here: nothing of note." if a lit room's contents are empty - OR exactly "Here: you can't see - no light." whenever the room is dark. CONCEAL contents in darkness: the player learns what is here only once a light source is active.
-  (d) <UpdateDungeon> block (mutations only; emit an empty <UpdateDungeon></UpdateDungeon> if nothing changed),
-  (e) <sprite> block (only if triggered).
+  (c) <UpdateDungeon> block (mutations only; emit an empty <UpdateDungeon></UpdateDungeon> if nothing changed) - this is the LAST substantive thing you write, and it is NOT optional. Do NOT write any status footer (Light/Exits/Here): the DungeonState script renders that footer itself, from the applied state, and appends it for you - if you write one it will be doubled. A turn that resolved damage, movement, an event, or any item/skill change but emitted NO mutations is a MALFORMED turn: never let the prose feel "finished" before this block. The footer is not your ending; the mutation block is.
+  (d) <sprite> block (only if triggered).
   Then STOP. Await the player.
 </crawl_pipeline>"""
 

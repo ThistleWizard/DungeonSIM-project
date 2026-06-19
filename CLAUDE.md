@@ -97,9 +97,13 @@ npm test                     # vitest run (all tests in tests/)
 npm run test:watch           # vitest watch
 npx vitest run -t "R3"       # run a single test by name substring
 npm run typecheck            # tsc --noEmit
-npm run build                # tsc → dist/
+npm run build                # tsc → dist/ (typecheck/compile only)
+npm run build:script         # esbuild → single dist/dungeonstate.js (the ST deliverable)
 npm run format               # prettier --write
 ```
+
+`build:script` (via `tools/build-script.mjs`) produces the file you actually load into
+SillyTavern; `build` is just `tsc`. See `LOADING.md` for how the bundle is installed.
 
 `src/parser.ts` is a **pure function** with no SillyTavern dependency — it and the schema
 run fully under Vitest. The applier, event wiring, and prompt injection (M3+) will need ST
@@ -161,9 +165,18 @@ the TTRPG depth layer (§13).
   swipe-back, and delete all restore correct HP — confirming `GENERATION_STARTED` reports the
   generation type on the target build, so the baseline rollback fires.
 - **M1–M5 verified live.** State persists, the §5 invariants hold, drift is gone, and rewind
-  is safe in the real app. The preset also gained an every-turn MUD status footer
-  (`Light:`/`Exits:`/`Here:`, rendered from `[CURRENT STATE]`; contents concealed in darkness)
-  — see the design-doc backlog for moving that render into the script (option B).
+  is safe in the real app. The every-turn MUD status footer (`Light:`/`Exits:`/`Here:`;
+  contents concealed in darkness) is now **script-owned** (`src/footer.ts`, the "option B"
+  move): `renderFooter` builds it from the POST-apply dungeon and `embedFooter` splices it
+  (sentinel-wrapped, idempotent) into the AI message just before the `<UpdateDungeon>` block,
+  via an injected `setMessageText` dep in `runtime.ts` (`setChatMessages` in bootstrap). This
+  fixed a real playtest bug: with the model owning the footer, that terminal-looking MUD block
+  sat right before the mutation block, and on heavy combat turns the model wrote it, felt
+  "done", and dropped `<UpdateDungeon>` entirely (state silently froze). Now the mutation block
+  is the model's natural LAST output, and the footer can't disagree with the variables (it's
+  rendered from applied state, not hand-computed from the pre-turn `[CURRENT STATE]`). The
+  preset's TASK 10 was updated to match (footer instruction removed; `<UpdateDungeon>` marked
+  the non-optional final emission, with a malformed-turn guard).
 - **M6 done (automap, see `DungeonState-M6-spec.md`)** — `src/map.ts` (`renderMap`, pure:
   grid-walk layout from the `rooms` graph → 8-bit SVG of the current depth; deterministic +
   stable coordinates, current-room amber highlight, undiscovered-exit `?` stubs,

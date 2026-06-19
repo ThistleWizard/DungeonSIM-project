@@ -27,6 +27,7 @@ import { baselineBefore, type Timeline } from './rewind.js';
 import { makeStore, processMessage, renderInjection, writeDungeon, type VariableStore } from './store.js';
 import { bootstrapCommands } from './commands.js';
 import { bootstrapDisplay } from './display.js';
+import { embedFooter, renderFooter } from './footer.js';
 
 /** Shape of a Tavern Helper prompt injection (subset of its InjectionPrompt we use). */
 export interface InjectPrompt {
@@ -51,6 +52,9 @@ export interface RuntimeDeps {
   timeline: Timeline;
   /** Read the final text of a committed message (for the apply path). */
   getMessageText: (messageId: number) => string;
+  /** Rewrite a committed message's text — used to embed the script-rendered MUD footer.
+   *  Optional: when absent the footer is simply not shown (state still applies normally). */
+  setMessageText?: (messageId: number, text: string) => void;
   /** Tavern Helper `eventOn`. */
   eventOn: (event: string, listener: (...args: any[]) => void) => unknown;
   /** Tavern Helper `eventMakeFirst` (so swipe-restore runs before other listeners). */
@@ -123,6 +127,13 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
     const result = processMessage(deps.store, deps.getMessageText(messageId), { warn });
     // Snapshot the post-turn state onto this exact message/swipe so the timeline owns it.
     deps.timeline.writeSnapshot(messageId, result.dungeon);
+    // Render the MUD status footer from the APPLIED state and embed it into the message — the
+    // script owns the footer now, so the model's last output is the <UpdateDungeon> block (it
+    // can no longer mistake a terminal-looking footer for the end of its turn).
+    if (deps.setMessageText) {
+      const footer = renderFooter(result.dungeon);
+      if (footer) deps.setMessageText(messageId, embedFooter(deps.getMessageText(messageId), footer));
+    }
     refreshInjection();
     return result;
   };
@@ -188,6 +199,10 @@ interface TavernGlobals {
   getVariables: (opt: ChatOption | MessageOption) => Record<string, any>;
   replaceVariables: (vars: Record<string, any>, opt: ChatOption | MessageOption) => void;
   getChatMessages: (range: string | number, options?: any) => Array<{ message?: string }>;
+  setChatMessages: (
+    messages: Array<{ message_id: number; message: string }>,
+    options?: { refresh?: 'none' | 'affected' | 'all' },
+  ) => Promise<void>;
   getLastMessageId: () => number;
   eventOn: RuntimeDeps['eventOn'];
   eventMakeFirst: RuntimeDeps['eventOn'];
@@ -227,6 +242,16 @@ function bootstrap(): void {
 
     const getMessageText = (messageId: number): string => g.getChatMessages?.(messageId)?.[0]?.message ?? '';
 
+    // Embed the script-rendered footer back into the message (re-renders the affected bubble).
+    // Fire-and-forget: setChatMessages is async but the apply path is sync and doesn't depend
+    // on the rewrite completing. Guarded so a missing API just skips the footer.
+    const setMessageText =
+      typeof g.setChatMessages === 'function'
+        ? (messageId: number, text: string): void => {
+            void g.setChatMessages!([{ message_id: messageId, message: text }], { refresh: 'affected' });
+          }
+        : undefined;
+
     const toastr = g.toastr;
     const warn = (msg: string): void => {
       console.warn(msg);
@@ -238,6 +263,7 @@ function bootstrap(): void {
       store,
       timeline,
       getMessageText,
+      setMessageText,
       eventOn: g.eventOn!,
       eventMakeFirst: g.eventMakeFirst,
       injectPrompts: g.injectPrompts!,

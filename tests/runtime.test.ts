@@ -68,6 +68,7 @@ function harness(seed?: Dungeon) {
     store,
     timeline: tl,
     getMessageText: id => text.get(id) ?? '',
+    setMessageText: (id, t) => text.set(id, t),
     eventOn: () => {},
     eventMakeFirst: () => {},
     injectPrompts: p => injections.push(...p),
@@ -128,6 +129,18 @@ describe('apply path — MESSAGE_RECEIVED', () => {
     expect(r.dungeon.meta.turn).toBe(1);
     expect(h.tl.readSnapshot(1)!.player.hp.cur).toBe(6);
     expect(h.lastInjection()).toContain('HP 6/10');
+  });
+
+  it('embeds the script-rendered footer into the message, before the mutation block', () => {
+    const h = harness(seedHp(10));
+    h.text.set(1, upd("_.add('player.hp.cur', -4);//hit", "_.add('meta.turn', 1);//tick"));
+    h.rt.onMessageReceived(1, 'normal');
+    const out = h.text.get(1)!;
+    expect(out).toContain('Exits: '); // footer rendered from applied state
+    expect(out.indexOf('<!--ds-footer-->')).toBeLessThan(out.indexOf('<UpdateDungeon>'));
+    // Re-applying the same message must not stack footers (idempotent).
+    h.rt.onMessageReceived(1, 'normal');
+    expect((h.text.get(1)!.match(/ds-footer/g) ?? []).length).toBe(2);
   });
 
   it('skips out-of-band generation types (quiet/impersonate/continue)', () => {
