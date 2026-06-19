@@ -43,6 +43,16 @@ describe('DungeonSchema (M1)', () => {
     expect(d.rooms.R01.exits.north.lock_revealed).toBe(false);
   });
 
+  it('accepts an undiscovered exit (to: null) and defaults a missing to to null', () => {
+    const d = DungeonSchema.parse({
+      rooms: {
+        R01: { id: 'R01', name: 'x', exits: { south: { to: null, type: 'open' }, east: { type: 'door' } } },
+      },
+    });
+    expect(d.rooms.R01.exits.south.to).toBeNull();
+    expect(d.rooms.R01.exits.east.to).toBeNull(); // omitted → unexplored
+  });
+
   it('validates an exit with category:portal and a discovered lock', () => {
     const parsed = DungeonSchema.safeParse({
       rooms: {

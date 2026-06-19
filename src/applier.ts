@@ -139,6 +139,26 @@ function guardExits(d: Dungeon, seg: string[], value: unknown, op: 'write' | 'un
     return { allowed: false, reason: `exit '${dir}' does not exist; add the whole exit first` };
   }
   if (seg[4] === 'state') return { allowed: true };
+  if (seg[4] === 'to') {
+    // `to` is write-once: null → room id (DISCOVERY) is allowed and auto-writes the reciprocal;
+    // id → different-id (REDIRECT) stays topology-locked.
+    const exit = _.get(d, ['rooms', roomId, 'exits', dir]) as Record<string, unknown> | undefined;
+    const cur = exit?.to;
+    if (cur != null) {
+      return { allowed: false, reason: `exit '${dir}' already leads to ${cur}; cannot redirect (topology lock)` };
+    }
+    const newTo = typeof value === 'string' ? value : undefined;
+    const opp = OPPOSITE[String(dir).toLowerCase()];
+    let reciprocal: Reciprocal | undefined;
+    if (newTo && opp && _.has(d, ['rooms', newTo]) && !_.has(d, ['rooms', newTo, 'exits', opp])) {
+      const type = exit?.type as string;
+      reciprocal = {
+        path: ['rooms', newTo, 'exits', opp],
+        value: { to: roomId, type: MIRROR_TYPE[type] ?? type, state: (exit?.state as string) ?? 'open' },
+      };
+    }
+    return { allowed: true, reciprocal };
+  }
   return { allowed: false, reason: `exits.${dir}.${seg[4]} is topology-locked` };
 }
 

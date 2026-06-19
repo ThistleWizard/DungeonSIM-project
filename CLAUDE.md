@@ -58,7 +58,10 @@ is a graph stored directly as nested objects (`dungeon.rooms.R03.exits.north = {
 
 1. **Topology lock** on `rooms.*.exits.*`: may add an exit to a new direction or change its
    `state`; may never delete an exit or redirect `to` (except a secret-reveal flag or an
-   explicit destruction command). Reciprocal edges auto-maintained.
+   explicit destruction command). An exit's `to` is **write-once**: `null` (an unexplored way
+   out — `ExitSchema.to` is `string | null`, default `null`) → a room id on **discovery** is
+   allowed and auto-writes the reciprocal; id → a *different* id is a blocked redirect.
+   Reciprocal edges auto-maintained.
 2. **Inventory legality**: remove/decrement only if present in sufficient qty; equip only if owned.
 3. **Numeric bounds**: clamp `hp.cur` to `[0, hp.max]`; the script rolls skill marks into
    rank-ups (compute, don't trust the model).

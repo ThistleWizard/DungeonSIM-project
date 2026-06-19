@@ -9,9 +9,10 @@
  */
 import type { Dungeon } from './schema.js';
 
-function exitLine(dir: string, e: { to: string; type: string; state?: string }): string {
+function exitLine(dir: string, e: { to: string | null; type: string; state?: string }): string {
   const state = e.state && e.state !== 'open' ? `, ${e.state}` : '';
-  return `${dir}->${e.to} (${e.type}${state})`;
+  const dest = e.to ?? '?'; // null = unexplored (destination not yet discovered)
+  return `${dir}->${dest} (${e.type}${state})`;
 }
 
 export function formatStateBlock(d: Dungeon): string {

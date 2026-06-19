@@ -116,6 +116,16 @@ describe('renderMap layout (M6 §B2)', () => {
   });
 });
 
+describe('renderMap unexplored exits (to: null)', () => {
+  it('renders an unexplored exit (to: null) as a stub, never an edge, without throwing', () => {
+    const d = rooms(room('R01', 'Entry', 1, { south: { to: null as unknown as string, type: 'open' } }));
+    expect(() => renderMap(d, 'R01', 1)).not.toThrow();
+    const svg = renderMap(d, 'R01', 1);
+    expect(svg).toContain('>?<'); // a generic undiscovered stub
+    expect(computeLayout(d, 1)).toEqual({ R01: [0, 0] }); // the null exit doesn't place a phantom room
+  });
+});
+
 describe('renderMap depth filtering (M6 §B1)', () => {
   it('omits rooms on other depths but keeps a vertical exit as a marker', () => {
     const d = rooms(

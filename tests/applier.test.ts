@@ -183,6 +183,20 @@ describe('invariant 1 — topology lock', () => {
     expect(r.dungeon.rooms.R01.exits.north.to).toBe('R02');
   });
 
+  it('discovers an unexplored exit (to:null → room id) and auto-writes the reciprocal', () => {
+    const d = DungeonSchema.parse({
+      rooms: { R01: { id: 'R01', name: 'Entry', exits: { south: { to: null, type: 'open' } } } },
+    });
+    // Player goes south: create the new room, then fill in the unexplored exit's destination.
+    const r = applyCommands(d, [
+      cmd('assign', 'rooms.R02', [{ id: 'R02', name: 'Hall', exits: {} }]),
+      cmd('set', 'rooms.R01.exits.south.to', [null, 'R02'], 'discovered south'),
+    ]);
+    expect(r.blocked).toEqual([]);
+    expect(r.dungeon.rooms.R01.exits.south.to).toBe('R02');
+    expect(r.dungeon.rooms.R02.exits.north).toMatchObject({ to: 'R01', type: 'open' }); // reciprocal
+  });
+
   it('blocks editing exit.to and exit.type, allows exit.state', () => {
     expect(applyCommands(base(), [cmd('set', 'rooms.R01.exits.north.to', ['R02', 'R09'])]).blocked).toHaveLength(1);
     expect(applyCommands(base(), [cmd('set', 'rooms.R01.exits.north.type', ['door', 'open'])]).blocked).toHaveLength(1);

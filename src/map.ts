@@ -125,7 +125,7 @@ function layout(levelRooms: Room[]): Map<string, Cell> {
       const room = byId.get(id)!;
       for (const dir of DIR_ORDER) {
         const exit = room.exits[dir];
-        if (!exit || exit.category !== 'spatial') continue;
+        if (!exit || exit.category !== 'spatial' || exit.to == null) continue;
         const target = byId.get(exit.to);
         if (!target || placed.has(target.id)) continue; // off-level / stub / already placed
         const want: Cell = [cell[0] + DIR_VEC[dir][0], cell[1] + DIR_VEC[dir][1]];
@@ -264,7 +264,7 @@ export function renderMap(
     if (!from) continue;
     for (const dir of DIR_ORDER) {
       const exit = room.exits[dir];
-      if (!exit || exit.category !== 'spatial') continue;
+      if (!exit || exit.category !== 'spatial' || exit.to == null) continue;
       if (exit.state === 'hidden') continue; // secret/unfound → perceive nothing (§spec B6)
       const to = placed.get(exit.to);
       if (!to) continue; // stub / off-level (handled below)
@@ -294,7 +294,7 @@ export function renderMap(
     const half = s.box / 2;
     for (const [dir, exit] of Object.entries(room.exits)) {
       if (exit.state === 'hidden') continue; // secret/unfound → perceive nothing
-      const traversed = rooms[exit.to] !== undefined; // target room exists = link has been used
+      const traversed = exit.to != null && rooms[exit.to] !== undefined; // target room exists = link used
 
       if (traversed) {
         // Wiring is now known — render by category, with the destination on hover.
@@ -392,7 +392,7 @@ function roomBox(room: Room, x: number, y: number, isCurrent: boolean, s: Style)
 function verticalMarker(x: number, y: number, exit: Exit, rooms: Record<string, Room>, s: Style): string {
   const up = /up/.test(exit.type);
   const glyph = up ? '↑' : '↓';
-  const dest = rooms[exit.to];
+  const dest = exit.to != null ? rooms[exit.to] : undefined;
   const label = exit.type.replace(/_/g, ' ') + (dest ? ` (to depth ${dest.depth})` : '');
   return (
     `<g><title>${esc(label)}</title>` +

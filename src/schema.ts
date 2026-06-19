@@ -50,9 +50,11 @@ export const ItemSchema = z.object({
 export const InventoryItemSchema = ItemSchema;
 export const RoomContentSchema = ItemSchema;
 
-// An exit edge. `to` is a room id. `state` mutable; `to`/`type` are topology-locked.
+// An exit edge. `to` is a room id, or null for an UNDISCOVERED way out (a passage you can
+// see but haven't gone through — its destination room doesn't exist yet). `state` is mutable;
+// `to` is write-once (null→id on discovery, never id→different-id); `type` is topology-locked.
 export const ExitSchema = z.object({
-  to: z.string(), // room id, e.g. "R02"
+  to: z.string().nullable().default(null), // room id e.g. "R02", or null = unexplored
   type: z.enum([
     'open',
     'archway',

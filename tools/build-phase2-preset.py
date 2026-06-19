@@ -77,7 +77,12 @@ ADDRESS ARRAY ITEMS BY ID: to change a FIELD on an element of an array, use its 
 
 RULES (the script enforces these; a command that violates them is rejected and logged):
   1. NUMBERS: prefer _.add for HP/marks/charges/ticks so the script does the math and clamps. Use only the amount this turn's resolved events justify.
-  2. MAP IS APPEND-ONLY & TOPOLOGY-LOCKED. Add a NEW room with _.assign('rooms.R##', {id:'R##',name:'...',descr:'...',exits:{},contents:[],visited:true}). Add a NEW exit with _.set('rooms.R##.exits.<dir>', null, {to:'R##',type:'<type>',state:'<state>'}); the script auto-writes the reciprocal edge. You may change an exit's STATE (e.g. _.set('rooms.R##.exits.<dir>.state', 'locked', 'open')). You may NEVER redirect or delete an exit, or change its type. Exit types: open, archway, door, portcullis, stairs_up, stairs_down, ladder, hole, crawlspace, secret. Exit states: open, closed, locked, barred, hidden, broken.
+  2. MAP IS APPEND-ONLY & TOPOLOGY-LOCKED.
+     - Add a NEW room with _.assign('rooms.R##', {id:'R##',name:'...',descr:'...',exits:{...},contents:[],visited:true}).
+     - An exit you can SEE but have NOT gone through is UNEXPLORED - give it `to: null` (the destination room doesn't exist yet). Seed a room's visible ways out right in its `exits`, e.g. exits:{south:{to:null,type:'open',state:'open'}, east:{to:null,type:'door',state:'closed'}}.
+     - When the player goes THROUGH an unexplored exit: first create the destination room (give IT its own unexplored exits, to:null), then DISCOVER the link with _.set('rooms.<here>.exits.<dir>.to', null, 'R##') - the script fills in `to` AND auto-writes the reciprocal edge back. (`to` is write-once: null -> a room id. You may NEVER redirect a known `to` to a different room, delete an exit, or change its type.)
+     - You may always change an exit's STATE: _.set('rooms.R##.exits.<dir>.state', 'closed', 'open').
+     - Exit types: open, archway, door, portcullis, stairs_up, stairs_down, ladder, hole, crawlspace, secret. Exit states: open, closed, locked, barred, hidden, broken.
   3. INVENTORY changes only via in-fiction events (take/drop/consume/break/gift): _.insert to gain a new item; _.remove by id (with a count for stacks) to lose or use up. Change a carried item's FIELDS in place by id: _.set('inventory.<id>.equipped', <old>, <new>), _.set('inventory.<id>.worn', ...), _.add('inventory.<id>.charges', -1). Quantities exact.
   4. ROOMS: an existing room's id/name/descr are immutable. Mutable: contents, exits.*.state, visited, effects. A room's `contents` is a real container of OBJECTS (the same shape as inventory items) - dropped gear, a corpse and its loot, a disarmed trap, a torch left burning on the floor. Add/remove with _.insert/_.remove; relocate between a room and the pack with _.move.
   5. BESTIARY is append-only. The first time a mob TYPE appears, _.assign('bestiary.<type>', {sprite_fragment:'<8-15 word canonical visual>', hp_base:<n>, defense:<n>}). Never edit an existing entry.
@@ -92,8 +97,8 @@ EXAMPLE:
 _.add('player.hp.cur', -4);//drowned strike, solid hit
 _.set('rooms.R03.exits.east.state', 'locked', 'open');//forced the swollen door
 _.set('inventory.torch_1.lit', false, true);//struck and lit a torch (script tracks its fuel + the Light line)
-_.assign('rooms.R04', {id:'R04',name:'Flooded Nave',descr:'Black water to the knee, pillars lost in dark.',exits:{},contents:[],visited:true});//entered
-_.set('rooms.R03.exits.east', null, {to:'R04',type:'door',state:'open'});//passage east (reciprocal auto-written)
+_.assign('rooms.R04', {id:'R04',name:'Flooded Nave',descr:'Black water to the knee, pillars lost in dark.',exits:{north:{to:null,type:'open',state:'open'}},contents:[],visited:true});//entered through R03's unexplored east door
+_.set('rooms.R03.exits.east.to', null, 'R04');//discovered where the east door leads (script auto-writes R04's reciprocal edge back)
 _.add('meta.turn', 1);//tick
 </UpdateDungeon>
 
@@ -155,7 +160,7 @@ Announce the character in a short system-voice summary (stats visible here, once
   _.insert('inventory', {id:'<snake_id>',name:'<Name>',qty:<n>,equipped:<bool>});//one per kit item
   // Light sources do NOT stack - seed each torch/lantern/candle as its OWN item with a unique id and `fuel` (ticks): torch 60, lantern 120, candle 40. They start unlit.
   _.insert('inventory', {id:'torch_1',name:'Torch',fuel:60,lit:false});//and torch_2, torch_3, ... one per torch
-  _.assign('rooms.R01', {id:'R01',name:'<Room Name>',descr:'<short>',exits:{},contents:[],visited:true});//first room
+  _.assign('rooms.R01', {id:'R01',name:'<Room Name>',descr:'<short>',exits:{<dir>:{to:null,type:'<type>',state:'open'}},contents:[],visited:true});//first room - each visible way out gets to:null until the player explores it
   // Light is DERIVED by the script - never seed a `light` object. If the character begins with a torch already lit, just flip it: _.set('inventory.torch_1.lit', false, true);
 
 Universal_Skills_List: Melee, Ranged, Athletics, Stealth, Lockpicking, Perception, Arcana, Divinity, Lore, Medicine, Survival, Persuasion. Untrained = rank 0 (no bonus). Scenario cards may add skills.
