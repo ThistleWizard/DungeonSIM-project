@@ -315,8 +315,11 @@ function applyRemove(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const id = cmd.args[0];
   const count = typeof cmd.args[1] === 'number' ? cmd.args[1] : 1;
 
-  // Match by element .id, else by deep value equality (invariant 2: must be present).
-  let idx = target.findIndex(el => _.isObject(el) && (el as { id?: unknown }).id === id);
+  // Match by element .id OR .name (conditions/effects key off `name`, like resolvePath),
+  // else by deep value equality (invariant 2: must be present).
+  let idx = target.findIndex(
+    el => _.isObject(el) && ((el as { id?: unknown }).id === id || (el as { name?: unknown }).name === id),
+  );
   if (idx === -1) idx = target.findIndex(el => _.isEqual(el, id));
   if (idx === -1) return ctx.block(cmd, `remove: '${fmt(id)}' not present in '${path}'`);
 

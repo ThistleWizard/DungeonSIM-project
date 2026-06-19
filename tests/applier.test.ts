@@ -252,6 +252,16 @@ describe('invariant 2 — inventory legality', () => {
   it('blocks removing more than the held quantity', () => {
     expect(applyCommands(base(), [cmd('remove', 'inventory', ['key', 5])]).blocked).toHaveLength(1);
   });
+  // Regression: conditions/effects key off `name`, not `id` (matching resolvePath). A spell
+  // wearing off — `_.remove('player.conditions', 'Shield')` — must succeed, not BLOCK.
+  it('removes a condition by name (not id)', () => {
+    const d = DungeonSchema.parse({
+      player: { conditions: [{ name: 'Shield', ticks: 4 }, { name: 'Blessed', ticks: null }] },
+    });
+    const r = applyCommands(d, [cmd('remove', 'player.conditions', ['Shield'], 'spell expired')]);
+    expect(r.blocked).toHaveLength(0);
+    expect(r.dungeon.player.conditions.map(c => c.name)).toEqual(['Blessed']);
+  });
 });
 
 describe('other verbs', () => {
