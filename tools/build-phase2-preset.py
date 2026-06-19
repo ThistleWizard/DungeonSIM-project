@@ -234,6 +234,33 @@ PATCHES = [
         "Events must respect the map ledger and established fiction.",
         "Events must respect the rooms graph in [CURRENT STATE] and established fiction.",
     ),
+    # [resolution philosophy, design §17] Rule of Cool — main prompt <rules>. Reward creativity
+    # at the INPUT to a roll (DC / advantage / setup), never by fudging the result.
+    (
+        "Fairness: The dice are law. Never fudge an outcome in the player's favor or against them. The dungeon is indifferent.",
+        "Fairness: The dice are law. Never fudge an outcome in the player's favor or against them. The dungeon is indifferent.\\nRule_of_Cool: Creative, daring, characterful play is ALWAYS encouraged and rewarded - but the reward lands on the INPUT of a roll (a fair or favorable DC, advantage, a setup bonus), never on the result. Determinism and the Rule of Cool do not conflict: bend the odds and raise the stakes for ingenuity, then let the dice fall honestly.",
+    ),
+    # [resolution philosophy, design §17] creative combat rewarded MECHANICALLY — <combat_engine>.
+    (
+        "A dropped portcullis beats a sword.",
+        "A dropped portcullis beats a sword. Setup actions are rewarded MECHANICALLY: an ambush, a decoy, a prepared trap, a lure, or seizing high ground / a chokepoint grants concrete advantage on the attacks it enables - a favorable hit bonus, a free or surprise strike, reduced enemy Defense, or auto-positioning - never a fudged result. Combat outcomes stay deterministic; creativity changes the INPUTS.",
+    ),
+    # [resolution philosophy, design §17] dead ends are legitimate — <room_and_movement_protocol>.
+    (
+        "- the world should reward lateral thinking.",
+        "- the world should reward lateral thinking.\\nDead_Ends: Not every room leads onward. MANY rooms are dead ends - a sealed vault, a collapsed gallery, a flooded sump, a one-entrance shrine - and that is GOOD: a dead end is where a tough mob, a puzzle, a locked door, or a hard choice earns its stakes. Do NOT reflexively give every room a forward exit; that bleeds tension. One hard rule: never globally strand the player - at least one viable route onward must always exist SOMEWHERE reachable, so a dead end is a local choice point, never a soft game-over.",
+    ),
+]
+
+# Edits that must apply to EVERY occurrence — text shared verbatim by the Normal AND Hard
+# <action_resolution_engine> prompts (the unique-anchor PATCHES above can't target it).
+MULTI_PATCHES = [
+    # [resolution philosophy, design §17] fail-forward: a failed non-combat check is a FORK in
+    # the story (Disco Elysium), never "nothing happens". Combat stays deterministic.
+    (
+        "  - No auto-wins: if an action would trivialize a major obstacle, it succeeds WITH new complications rather than being blocked.",
+        "  - No auto-wins: if an action would trivialize a major obstacle, it succeeds WITH new complications rather than being blocked.\\n  - Fail_Forward: a failed NON-COMBAT check NEVER resolves to a flat null result (no change, no consequence). Every failure produces a NEW FACT that moves the fiction - a complication, a real cost, or a discovered truth (a clue, a glimpse, something learned about the world or the character). Author the failure branch with the same care as success: a failed roll is a FORK in the story, not a dead stop. (Skill / exploration / social register only; COMBAT stays deterministic per <combat_engine>, where failure already carries mechanical teeth.)",
+    ),
 ]
 
 
@@ -259,6 +286,11 @@ def main() -> int:
     for old, new in PATCHES:
         if blob.count(old) != 1:
             print(f"ERROR: patch anchor not unique ({blob.count(old)}x): {old[:60]!r}")
+            return 1
+        blob = blob.replace(old, new)
+    for old, new in MULTI_PATCHES:
+        if blob.count(old) < 1:
+            print(f"ERROR: multi-patch anchor not found: {old[:60]!r}")
             return 1
         blob = blob.replace(old, new)
     data = json.loads(blob)

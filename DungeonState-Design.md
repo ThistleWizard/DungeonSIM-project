@@ -368,6 +368,34 @@ Add `threads` (array or record) per the shape above. The injection layer gains a
 
 ---
 
+## 17. Resolution philosophy — Rule of Cool, fail-forward, and legitimate dead ends
+
+*Adjudication and topology counterpart to §16. Same spine — the anti-railroading mandate — applied to how rolls resolve and how the map is shaped, rather than to narrative threads. Read §16 first; this inherits its core move (license the un-assistant-like thing). Operationalized in the preset as of the 2026-06 pass; framing here is the spec the prompt serves, and the place to tune from.*
+
+### The four principles
+1. **Rule of Cool is always in effect.** Creative use of skills, items, and the environment — and creative approaches to combat — are encouraged and **rewarded**, not merely tolerated.
+2. **Failure must be a live possibility.** Fair, honest DCs with a real chance of failure; stakes require it. (The model already does this well; the indifferent-dungeon / neutral-bias stance backs it.)
+3. **Fail-forward — failure ≠ narrative loss** (the central, subtle point). Like *Disco Elysium*, a failed roll should advance plot, world, and character. The encodable rule: **a failed non-combat check never resolves to "nothing happens"; it produces a NEW FACT** — a complication, a real cost, or a discovered truth — and still moves the fiction. The failure branch is authored with the same care as the success branch.
+4. **Dead ends are legitimate and valuable.** Many rooms lead nowhere, and that is *good*: a dead end is where a hard mob, a puzzle, a locked door, or a hard choice earns its stakes. The model must be **licensed** to make them (its eagerness wants every room to be "useful"). One hard invariant: **never globally strand the player** — at least one viable route onward must always exist somewhere reachable, so a dead end is a local choice point, never a soft game-over.
+
+### Why this is §16 again (the unifying move)
+All four fight the same RLHF eagerness §16 names: the eager host rescues the player (kills stakes), softens or apologizes for failure (kills fail-forward), and makes every room pay off (kills dead ends). So — exactly as §16 learned for narrative threads — these must be written as **permission / identity**, not bare rules: license the dungeon to let you fail, license failure as *content*, license rooms that go nowhere. "Indifferent world, not eager storyteller" is the identity that makes all of it in-character rather than a suppressed instinct.
+
+### The axis that keeps combat deterministic
+The dividing line is **"does the action already carry a discrete mechanical consequence?"**
+- **Combat already has teeth** (HP, position, initiative) → keep it **deterministic**; do *not* add narrative fail-forward softness (it would undercut the determinism the system is built on). Creativity — decoy, ambush, prepared trap, lure, seizing high ground / a chokepoint — is rewarded by **changing the mechanical inputs** (advantage, a free/surprise strike, reduced enemy Defense, auto-positioning), never by fudging outcomes.
+- **Skill / exploration / social checks often carry no built-in consequence** → a flat "you fail, nothing happens" is both boring *and* stakeless → this is exactly where fail-forward earns its keep.
+This is also why the Rule of Cool and determinism don't conflict: ingenuity is paid out at the *input* to a roll (DC, advantage, setup), then the dice fall honestly.
+
+### Where it lives in the preset
+- Rule of Cool → main prompt `<rules>` (`Rule_of_Cool`, beside `Fairness`).
+- Fail-forward → `<action_resolution_engine>` `Special` (`Fail_Forward`, applied to BOTH the Normal and Hard difficulty prompts via the build's `MULTI_PATCHES`).
+- Creative-combat reward → `<combat_engine>` `Tactical_Environment`.
+- Dead ends → `<room_and_movement_protocol>` `Dungeon_Generation_Style` (`Dead_Ends`).
+All four are generated edits in `tools/build-phase2-preset.py` — never hand-edit `DungeonSIM-Phase2.json`. Expect playtest iteration on tone (esp. fail-forward not tipping into the model narrating consolation prizes, and dead-end frequency).
+
+---
+
 ## 15. Status log & milestone state (living)
 
 *Updated as milestones land. Keeps the "someday pile" visible and dated so deferred ideas don't nag during the push to a shippable Gold Box core.*
