@@ -203,8 +203,15 @@ the TTRPG depth layer (§13).
   **Verified live in SillyTavern:** all three commands register and render correctly.
 - **M8 done (Gold Box display panel, §14) — built, unit-tested, and live-verified in SillyTavern**
   (button + `/display`, per-turn updates, swipe/delete consistency, narrow→tabs all confirmed).
-  Follow-up: **graphical/appearance pass** on the panel still wanted (layout/styling polish — the
-  renderers work; the look is not yet dialed in).
+  Follow-up **graphical/appearance pass — DONE (`restyle` branch off `m8-display`)**: `src/style.ts`
+  reskinned to an SSI Gold Box palette (navy-black + parchment/gold, beveled double-frame `panel()`
+  with a recessed uppercase title bar, optional pixel webfont via the `FONT` const → monospace
+  fallback); `renderViewport` (display.ts) became a framed **scene window** — room-typed background +
+  a positioned `data-sprite-slot` that M7 fills (the `data-viewport` hook moved onto the scene div),
+  lighting-aware (dark ⇒ void + "you stand in darkness"); `map.ts` SVG colors synced to the new
+  palette. Pure/additive (new `frameLt`/`frameDk`/`stone`/`green` tokens; signatures unchanged), 125
+  tests pass, no engine touch. NOT yet live-verified in ST. The pixel font needs an ST-side
+  `@font-face`/custom-CSS load for the full DOS-CRPG look (graceful monospace until then).
   `src/display.ts`: pure `renderDisplay` (a 2×2 dashboard of Viewport · Map · Character ·
   Inventory tiles, each reusing the existing renderers) + `renderViewport` (a live text
   stand-in — current room, or faced mob in combat — carrying a `data-viewport` hook M7 fills
@@ -217,7 +224,7 @@ the TTRPG depth layer (§13).
   `refreshInjection`, and `bootstrap()` registers the panel's `refresh` there — so the panel
   can never disagree with the chat (the §14 M5 dependency, free). Shared `src/style.ts`
   (palette + `panel()` card) keeps all tiles identical; `sheet.ts` refactored onto it.
-- **Next: M7** — sprite system fills the M8 viewport's `data-viewport` hook. **LIBRARY-first**
+- **Next: M7** — sprite system fills the scene window's `data-sprite-slot` hook (added by the restyle). **LIBRARY-first**
   (reframed with the user; supersedes the earlier generate-and-cache plan). Ladder: **curated
   tagged sprite pack (primary) → image-gen fallback → text/placeholder**. The model emits tags
   on a new bestiary type; a PURE resolver matches tags → a concrete sprite (`hash(id)` tie-break
@@ -226,6 +233,20 @@ the TTRPG depth layer (§13).
   tiny), outside per-chat state. Ship a CC0/licensed pack as default (Gold Box rips are
   copyrighted — fine locally, not redistributable). Gen fallback keeps the cache-once design via
   ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan.
+- **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
+  four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
+  input) that REPARENTS ST's `#chat` rather than mirroring it. Deliberately last + highest risk:
+  the only milestone that couples to ST internals. Hard requirements: toggle default-OFF,
+  desktop-only with mobile fallback, fail-safe rehoming, zero engine coupling. Depends on the
+  restyle (done) + M7 (viewport sprite). Spike the reparent + ST-send seams (version-sensitive)
+  before committing.
+
+### The roadmap branches (kept isolated for clean playtest bug-attribution)
+Three in-flight branches off `m8-display`, each a distinct concern so a bug surfaces against one
+change-set: **`m8-display`** (PR #1) = deterministic — footer fix + M8 panel + items/light engine;
+**`resolution-philosophy`** = narrative — §17 Rule-of-Cool/fail-forward/dead-ends preset edits;
+**`restyle`** = presentation — the Gold Box appearance pass above. `display.ts` lives only on
+`m8-display`, so the latter two branch from it, not `main`.
 
 ### The preset fork
 
