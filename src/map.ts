@@ -43,9 +43,9 @@ const DEFAULTS: Style = {
   box: 76,
   pad: 44,
   stub: 22,
-  bg: '#0a0a18',
-  grid: '#1b1733',
-  boxFill: '#141026',
+  bg: '#15171c',
+  grid: '#262a32',
+  boxFill: '#1c1f26',
   boxStroke: '#c8a84a',
   edge: '#5a7ab8',
   lockEdge: '#a06a2c',
@@ -328,7 +328,7 @@ export function renderMap(
   // ---- depth badge (corner) ----
   out.push(
     `<rect x="8" y="8" width="${10 + 9 * `DEPTH ${depth}`.length}" height="22" rx="3" ` +
-      `fill="#141026" stroke="${s.boxStroke}"/>` +
+      `fill="#1c1f26" stroke="${s.boxStroke}"/>` +
       `<text x="14" y="23" fill="${s.highlight}" font-size="${s.fontBadge}" font-weight="bold">DEPTH ${depth}</text>`,
   );
 
@@ -396,7 +396,7 @@ function verticalMarker(x: number, y: number, exit: Exit, rooms: Record<string, 
   const label = exit.type.replace(/_/g, ' ') + (dest ? ` (to depth ${dest.depth})` : '');
   return (
     `<g><title>${esc(label)}</title>` +
-    `<circle cx="${x}" cy="${y}" r="9" fill="#141026" stroke="${s.edge}"/>` +
+    `<circle cx="${x}" cy="${y}" r="9" fill="#1c1f26" stroke="${s.edge}"/>` +
     `<text x="${x}" y="${y + 4}" fill="${s.edge}" font-size="12" text-anchor="middle">${glyph}</text></g>`
   );
 }
@@ -404,7 +404,7 @@ function verticalMarker(x: number, y: number, exit: Exit, rooms: Record<string, 
 function portalMarker(x: number, y: number, exit: Exit, s: Style): string {
   return (
     `<g><title>${esc(exit.type.replace(/_/g, ' '))}</title>` +
-    `<circle cx="${x}" cy="${y}" r="9" fill="#141026" stroke="${s.highlight}"/>` +
+    `<circle cx="${x}" cy="${y}" r="9" fill="#1c1f26" stroke="${s.highlight}"/>` +
     `<text x="${x}" y="${y + 4}" fill="${s.highlight}" font-size="12" text-anchor="middle">⊙</text></g>`
   );
 }
@@ -424,7 +424,7 @@ function stub(x: number, y: number, half: number, dir: string, s: Style): string
     `<g><title>${esc(DIR_VEC[dir] ? dir : 'unexplored way')}</title>` +
     `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${s.textDim}" ` +
     `stroke-width="2" stroke-dasharray="3 3"/>` +
-    `<rect x="${x2 - 6}" y="${y2 - 6}" width="12" height="12" rx="2" fill="#141026" stroke="${s.textDim}"/>` +
+    `<rect x="${x2 - 6}" y="${y2 - 6}" width="12" height="12" rx="2" fill="#1c1f26" stroke="${s.textDim}"/>` +
     `<text x="${x2}" y="${y2 + 4}" fill="${s.textDim}" font-size="10" text-anchor="middle">?</text></g>`
   );
 }

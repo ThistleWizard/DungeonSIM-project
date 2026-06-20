@@ -15,8 +15,8 @@
 // PALETTE — 16-ish color SSI-flavored set. Swap these and the whole UI reskins.
 // ---------------------------------------------------------------------------
 export const PALETTE = {
-  bg: '#0a0a18', // near-black navy — the SSI dungeon void
-  panel: '#141026', // dark indigo panel fill
+  bg: '#15171c', // neutral dark charcoal — dungeon stone
+  panel: '#1c1f26', // stone-gray panel fill
   stroke: '#c8a84a', // MAIN GOLD border
   text: '#d8c8a0', // parchment
   dim: '#7a6a4a', // faded parchment (secondary text)
