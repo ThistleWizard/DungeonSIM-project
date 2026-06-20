@@ -101,6 +101,7 @@ describe('renderViewport (M8 stand-in until M7 sprites)', () => {
   it('does NOT throw on a malformed mob (undefined name, array status) — a render crash here froze the live panel', () => {
     // Real stored state that failed schema validation but was kept as-is; bypass the schema.
     const d = {
+      light: { source: 'Torch', ticks_remaining: 10 }, // lit, so the scene window renders the mob
       player: { location: 'R01', hp: { cur: 6, max: 6 }, skills: {}, conditions: [] },
       rooms: { R01: { id: 'R01', name: 'Hall', depth: 1, exits: {}, contents: [] } },
       inventory: [],
