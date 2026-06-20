@@ -27,7 +27,7 @@ export interface CommandDeps {
 /** Render the automap for the player's CURRENT location + depth from stored state. */
 export function renderCurrentMap(store: VariableStore, warn?: (m: string) => void): string {
   const d = readDungeon(store, warn);
-  return renderMap(d.rooms, d.player.location, d.meta.depth);
+  return renderMap(d.rooms, d.player.location, d.rooms?.[d.player.location]?.depth ?? d.meta.depth);
 }
 
 /**
@@ -52,7 +52,7 @@ export function registerMapCommand(deps: CommandDeps): () => string {
     'map',
     'Automap',
     'Render the automap for the current depth (current room highlighted).',
-    d => renderMap(d.rooms, d.player.location, d.meta.depth),
+    d => renderMap(d.rooms, d.player.location, d.rooms?.[d.player.location]?.depth ?? d.meta.depth),
   );
 }
 

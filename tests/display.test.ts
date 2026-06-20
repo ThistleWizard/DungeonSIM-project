@@ -50,6 +50,24 @@ describe('renderDisplay (M8)', () => {
   it('is deterministic', () => {
     expect(renderDisplay(world())).toBe(renderDisplay(world()));
   });
+
+  // The map follows the player's CURRENT ROOM depth, not meta.depth — so a level change
+  // renders correctly even if meta.depth bookkeeping lags. Player is on depth 2 while
+  // meta.depth is still a stale 1; the map must still place + highlight the current room.
+  it('renders the level of the room the player is in, not stale meta.depth', () => {
+    const twoLevels = DungeonSchema.parse({
+      meta: { depth: 1 }, // stale: player descended but meta.depth not updated
+      light: { source: 'Torch', ticks_remaining: 20 },
+      player: { name: 'Tam', location: 'R02', hp: { cur: 6, max: 6 } },
+      rooms: {
+        R01: { id: 'R01', name: 'Upper Hall', depth: 1, exits: {} },
+        R02: { id: 'R02', name: 'Cistern Landing', depth: 2, exits: {} },
+      },
+    });
+    const html = renderDisplay(twoLevels);
+    expect(html).toContain('@ YOU'); // current room is on the rendered level (would be absent if depth 1 drawn)
+    expect(html).toContain('R02');
+  });
 });
 
 describe('renderViewport (M8 stand-in until M7 sprites)', () => {

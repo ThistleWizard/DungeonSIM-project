@@ -80,7 +80,7 @@ export function renderDisplay(d: Dungeon, opts: DisplayOptions = {}): string {
   const active = opts.activeTab ?? DEFAULT_TAB;
   const tiles: Record<TabId, string> = {
     viewport: renderViewport(d),
-    map: renderMap(d.rooms, d.player.location, d.meta.depth),
+    map: renderMap(d.rooms, d.player.location, d.rooms?.[d.player.location]?.depth ?? d.meta.depth),
     character: renderSheet(d),
     inventory: renderInventory(d),
   };
