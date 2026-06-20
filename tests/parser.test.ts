@@ -89,9 +89,28 @@ describe('extractCommands (extract-commands.spec.md)', () => {
     expect(cmds[0]).toMatchObject({ type: 'set', path: 'a', args: [1, 2], reason: 'r' });
   });
 
-  it('R11 — empty / no block yields []', () => {
+  it('R11 — empty / no block yields [] (a lone stray command stays ignored)', () => {
     expect(extractCommands('')).toEqual([]);
     expect(extractCommands('just narrative prose, no block here. _.set(a,1,2);')).toEqual([]);
+  });
+
+  it('R12 — recovers a tagless command block (model forgot <UpdateDungeon>)', () => {
+    // The combat-turn bug: ≥2 well-formed command lines but no wrapper tags. Recovered.
+    const msg = [
+      'You strike the goblin.',
+      "_.set('combat.active', false, true);//joined",
+      "_.add('combat.mobs.goblin_1.hp_cur', -3);//hit",
+      "_.add('player.hp.cur', -2);//slash",
+      "_.add('meta.turn', 1);//tick",
+    ].join('\n');
+    const cmds = extractCommands(msg);
+    expect(cmds.map(c => c.type)).toEqual(['set', 'add', 'add', 'add']);
+    expect(cmds[1].path).toBe('combat.mobs.goblin_1.hp_cur');
+  });
+
+  it('R12 — an EMPTY block is an intentional no-op, never falls back to scanning prose', () => {
+    const msg = `Nothing happens. <UpdateDungeon></UpdateDungeon>  (aside: _.set('x',1,2); _.add('y',1);)`;
+    expect(extractCommands(msg)).toEqual([]); // block present (empty) → prose not scanned
   });
 
   it('handles an unterminated block (open tag, no close tag)', () => {

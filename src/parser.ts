@@ -198,9 +198,22 @@ export function extractCommands(input: string): Command[] {
   if (!input) return out;
   BLOCK_RE.lastIndex = 0;
   let block: RegExpExecArray | null;
+  let foundBlock = false;
   while ((block = BLOCK_RE.exec(input)) !== null) {
+    foundBlock = true;
     if (block[1]) scanBody(block[1], out);
     if (block.index === BLOCK_RE.lastIndex) BLOCK_RE.lastIndex++; // guard against empty match
+  }
+  // Recovery fallback: if the model emitted the commands but forgot the <UpdateDungeon>
+  // wrapper entirely (observed on a heavy combat turn — froze state for the whole turn),
+  // scan the whole message so the turn still applies. Fires ONLY when no block tag exists at
+  // all (a real block, even an empty intentional no-op, always wins) AND ≥2 commands are
+  // found: one stray `_.x()` in prose is likely an example/typo (R11 keeps ignoring it), but
+  // several consecutive command lines are unmistakably a mutation block that lost its tags.
+  if (!foundBlock) {
+    const recovered: Command[] = [];
+    scanBody(input, recovered);
+    if (recovered.length >= 2) out.push(...recovered);
   }
   return out;
 }
