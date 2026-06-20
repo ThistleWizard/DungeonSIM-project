@@ -372,14 +372,15 @@ Add `threads` (array or record) per the shape above. The injection layer gains a
 
 *Adjudication and topology counterpart to §16. Same spine — the anti-railroading mandate — applied to how rolls resolve and how the map is shaped, rather than to narrative threads. Read §16 first; this inherits its core move (license the un-assistant-like thing). Operationalized in the preset as of the 2026-06 pass; framing here is the spec the prompt serves, and the place to tune from.*
 
-### The four principles
+### The five principles
 1. **Rule of Cool is always in effect.** Creative use of skills, items, and the environment — and creative approaches to combat — are encouraged and **rewarded**, not merely tolerated.
 2. **Failure must be a live possibility.** Fair, honest DCs with a real chance of failure; stakes require it. (The model already does this well; the indifferent-dungeon / neutral-bias stance backs it.)
 3. **Fail-forward — failure ≠ narrative loss** (the central, subtle point). Like *Disco Elysium*, a failed roll should advance plot, world, and character. The encodable rule: **a failed non-combat check never resolves to "nothing happens"; it produces a NEW FACT** — a complication, a real cost, or a discovered truth — and still moves the fiction. The failure branch is authored with the same care as the success branch.
 4. **Dead ends are legitimate and valuable.** Many rooms lead nowhere, and that is *good*: a dead end is where a hard mob, a puzzle, a locked door, or a hard choice earns its stakes. The model must be **licensed** to make them (its eagerness wants every room to be "useful"). One hard invariant: **never globally strand the player** — at least one viable route onward must always exist somewhere reachable, so a dead end is a local choice point, never a soft game-over.
+5. **Conflict density — a crawl needs teeth (and the descent is earned).** Surfaced from live playtest: the model generated a whole level of good atmospheric prose with zero monster, trap, or puzzle. A level the player crosses end-to-end with no challenge is a *failed* level; atmosphere is not a substitute for friction. So: seed every level with real conflict, and **gate the descent** — the way *down* is guarded by a meaningful obstacle (creature, trap, puzzle, locked/barred way, hazard), never free. This is the *complement* to dead-ends (#4): #4 says not every room needs a way forward; #5 says the ways forward that matter — especially down — must be *earned*. It's a content-density floor, **not** a railroad and not a difficulty ramp: the obstacle stays indifferent (doesn't scale to the player) and is beatable many ways; quiet connecting rooms are fine. **Tunable** (the user flagged this for iteration): a deliberate safe haven, or a descent already hard-won by what's just behind it, can skip the gate — watch for it feeling formulaic.
 
 ### Why this is §16 again (the unifying move)
-All four fight the same RLHF eagerness §16 names: the eager host rescues the player (kills stakes), softens or apologizes for failure (kills fail-forward), and makes every room pay off (kills dead ends). So — exactly as §16 learned for narrative threads — these must be written as **permission / identity**, not bare rules: license the dungeon to let you fail, license failure as *content*, license rooms that go nowhere. "Indifferent world, not eager storyteller" is the identity that makes all of it in-character rather than a suppressed instinct.
+All five fight the same RLHF eagerness §16 names: the eager host rescues the player (kills stakes), softens or apologizes for failure (kills fail-forward), makes every room pay off (kills dead ends), and reaches for pleasant atmosphere over real friction (kills conflict density — pretty prose feels "safer" than throwing a hard obstacle at the user). So — exactly as §16 learned for narrative threads — these must be written as **permission / identity**, not bare rules: license the dungeon to let you fail, license failure as *content*, license rooms that go nowhere, license it to put real teeth in the player's path. "Indifferent world, not eager storyteller" is the identity that makes all of it in-character rather than a suppressed instinct.
 
 ### The axis that keeps combat deterministic
 The dividing line is **"does the action already carry a discrete mechanical consequence?"**
@@ -392,7 +393,8 @@ This is also why the Rule of Cool and determinism don't conflict: ingenuity is p
 - Fail-forward → `<action_resolution_engine>` `Special` (`Fail_Forward`, applied to BOTH the Normal and Hard difficulty prompts via the build's `MULTI_PATCHES`).
 - Creative-combat reward → `<combat_engine>` `Tactical_Environment`.
 - Dead ends → `<room_and_movement_protocol>` `Dungeon_Generation_Style` (`Dead_Ends`).
-All four are generated edits in `tools/build-phase2-preset.py` — never hand-edit `DungeonSIM-Phase2.json`. Expect playtest iteration on tone (esp. fail-forward not tipping into the model narrating consolation prizes, and dead-end frequency).
+- Conflict density / earned descent → `<room_and_movement_protocol>` `Dungeon_Generation_Style` (`Conflict_Density`, beside `Dead_Ends`).
+All five are generated edits in `tools/build-phase2-preset.py` — never hand-edit `DungeonSIM-Phase2.json`. Expect playtest iteration on tone (esp. fail-forward not tipping into the model narrating consolation prizes, dead-end frequency, and conflict-gating not feeling formulaic — "another guardian at the stairs").
 
 ---
 
