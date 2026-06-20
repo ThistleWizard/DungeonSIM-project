@@ -58,8 +58,14 @@ export interface PanelOptions {
  * you can self-host "Px437 IBM VGA 8x16" and prepend it to this chain.)
  */
 export const FONT_FAMILY = `"Silkscreen", monospace`;
-/** @font-face loader for the panel font, injected into the parent doc by bootstrapDisplay. */
-export const FONT_IMPORT_CSS = `@import url('https://fonts.googleapis.com/css2?family=Silkscreen&display=swap');`;
+/**
+ * Loads the theme webfonts (Silkscreen for the panel/chrome, VT323 for chat prose) into the
+ * parent ST document — injected by bootstrapDisplay as the sole content of a dedicated <style>
+ * element, which is the one place `@import` actually works in SillyTavern (it does NOT work in
+ * the user's Custom CSS box — see the README). Loading both here means the Custom CSS theme
+ * can just reference the fonts by name, no @import needed.
+ */
+export const FONT_IMPORT_CSS = `@import url('https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap');`;
 const FONT = FONT_FAMILY;
 
 export function panel(title: string, inner: string, opts: PanelOptions = {}): string {
