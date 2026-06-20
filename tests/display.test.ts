@@ -90,4 +90,17 @@ describe('renderViewport (M8 stand-in until M7 sprites)', () => {
     expect(html).toContain('HP 5/12');
     expect(html).toContain('Facing');
   });
+
+  it('does NOT throw on a malformed mob (undefined name, array status) — a render crash here froze the live panel', () => {
+    // Real stored state that failed schema validation but was kept as-is; bypass the schema.
+    const d = {
+      player: { location: 'R01', hp: { cur: 6, max: 6 }, skills: {}, conditions: [] },
+      rooms: { R01: { id: 'R01', name: 'Hall', depth: 1, exits: {}, contents: [] } },
+      inventory: [],
+      meta: { turn: 1, depth: 1 },
+      combat: { active: true, mobs: [{ id: 'goblin_1', type: 'goblin', hp_cur: 5, hp_max: 8, status: [] }] },
+    } as any;
+    expect(() => renderViewport(d)).not.toThrow();
+    expect(renderViewport(d)).toContain('goblin'); // name falls back to the type
+  });
 });

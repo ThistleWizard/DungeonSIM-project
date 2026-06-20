@@ -54,8 +54,10 @@ export function renderViewport(d: Dungeon): string {
   if (d.combat?.active && d.combat.mobs?.length) {
     const mobs = d.combat.mobs
       .map(m => {
-        const status = m.status ? ` <span style="color:${C.dim}">${esc(m.status)}</span>` : '';
-        return `<div>${esc(m.name)} <span style="color:${C.dim}">HP ${m.hp_cur}/${m.hp_max}</span>${status}</div>`;
+        const statusText = typeof m.status === 'string' ? m.status : '';
+        const status = statusText ? ` <span style="color:${C.dim}">${esc(statusText)}</span>` : '';
+        const name = m.name || m.type || 'creature'; // tolerate a malformed mob missing its name
+        return `<div>${esc(name)} <span style="color:${C.dim}">HP ${m.hp_cur}/${m.hp_max}</span>${status}</div>`;
       })
       .join('');
     body = `<div style="color:${C.hp};margin-bottom:4px">⚔ Facing</div>${mobs}`;

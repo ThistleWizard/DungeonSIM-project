@@ -17,9 +17,15 @@ export const PALETTE = {
   accent: '#3f6e8c',
 } as const;
 
-/** Escape text for safe interpolation into HTML/SVG. */
-export function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** Escape text for safe interpolation into HTML/SVG. Coerces non-strings (undefined, an
+ *  array, a number) to a string first, so malformed/partial state can never throw mid-render
+ *  and kill a panel refresh — the applier tolerates bad data, the renderers must too. */
+export function esc(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 export interface PanelOptions {
