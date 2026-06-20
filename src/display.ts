@@ -17,7 +17,7 @@ import { renderMap } from './map.js';
 import { renderInventory, renderSheet } from './sheet.js';
 import { type Dungeon } from './schema.js';
 import { readDungeon, type VariableStore } from './store.js';
-import { PALETTE as C, esc, panel } from './style.js';
+import { PALETTE as C, esc, panel, FONT_FAMILY, FONT_IMPORT_CSS } from './style.js';
 
 const TABS = [
   { id: 'viewport', label: 'View' },
@@ -32,14 +32,14 @@ const DEFAULT_TAB: TabId = 'map';
 /** Scoped, container-responsive CSS for the panel's INNER chrome (grid + tabs). */
 const DISPLAY_STYLE =
   `<style>` +
-  `.ds-display{container-type:inline-size;font-family:monospace;background:${C.bg};color:${C.text}}` +
+  `.ds-display{container-type:inline-size;font-family:${FONT_FAMILY};background:${C.bg};color:${C.text}}` +
   `.ds-display *{box-sizing:border-box}` +
   `.ds-display .ds-grid{display:grid;grid-template-columns:1fr;gap:8px;padding:8px}` +
   `.ds-display .ds-tile{min-width:0;display:none}` +
   `.ds-display .ds-tile.ds-active{display:block}` +
   `.ds-display .ds-tabs{display:flex;gap:4px;padding:8px 8px 0}` +
   `.ds-display .ds-tab{flex:1;background:${C.panel};color:${C.text};border:1px solid ${C.stroke};` +
-  `border-radius:4px;padding:6px 4px;font-family:monospace;font-size:12px;cursor:pointer}` +
+  `border-radius:4px;padding:6px 4px;font-family:${FONT_FAMILY};font-size:12px;cursor:pointer}` +
   `.ds-display .ds-tab.ds-active{color:${C.amber};border-color:${C.amber}}` +
   // Wide enough to show all four at once → 2×2 quadrants, tab bar hidden.
   `@container (min-width:480px){` +
@@ -191,6 +191,7 @@ export function bootstrapDisplay(store: VariableStore, warn?: (m: string) => voi
   // Default OFF (§14). Sticky on desktop if the player turned it on before; never auto-on on phones.
   let visible = !isNarrow() && g.localStorage?.getItem?.(VIS_KEY) === '1';
 
+  injectStyleOnce(parentDoc, 'ds-font', FONT_IMPORT_CSS); // self-load Silkscreen so the panel matches without ST Custom CSS
   injectStyleOnce(parentDoc, POS_STYLE_ID, POSITION_CSS);
 
   let $root = $(`#${ROOT_ID}`, parentDoc);

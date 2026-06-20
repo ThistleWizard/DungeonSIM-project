@@ -52,12 +52,15 @@ export interface PanelOptions {
  * A Gold Box card: beveled gold double-frame with a recessed title bar. Same signature as
  * before, so it's a drop-in for every caller.
  *
- * FONT note: for the full effect, load a pixel/bitmap webfont once (ST custom CSS or an
- * @font-face in the panel CSS) and it will apply here. "Px437 IBM VGA 8x16" gives authentic
- * DOS-CRPG; a softer pixel font ("Silkscreen", "Pixelify Sans") is gentler against prose.
- * Falls back to monospace if absent.
+ * FONT: Silkscreen — the chosen Gold Box UI font. The display panel self-loads it from
+ * Google Fonts (see FONT_IMPORT_CSS / bootstrapDisplay), so it applies even without any ST
+ * Custom CSS. Falls back to monospace if the webfont can't load. (For an authentic VGA look
+ * you can self-host "Px437 IBM VGA 8x16" and prepend it to this chain.)
  */
-const FONT = `"Px437 IBM VGA 8x16", "Silkscreen", monospace`;
+export const FONT_FAMILY = `"Silkscreen", monospace`;
+/** @font-face loader for the panel font, injected into the parent doc by bootstrapDisplay. */
+export const FONT_IMPORT_CSS = `@import url('https://fonts.googleapis.com/css2?family=Silkscreen&display=swap');`;
+const FONT = FONT_FAMILY;
 
 export function panel(title: string, inner: string, opts: PanelOptions = {}): string {
   const maxWidth = opts.maxWidth === undefined ? 520 : opts.maxWidth;
