@@ -1,0 +1,62 @@
+/* ===========================================================================
+ * DungeonSIM Gold Box theme for SillyTavern  (chat / chrome)
+ * ---------------------------------------------------------------------------
+ * Paste the whole file into:  SillyTavern -> User Settings -> Custom CSS.
+ *
+ * This themes ST's OWN UI (chat messages, prose font, input bar) to match the
+ * DungeonState display panel (which is themed by the script's src/style.ts palette).
+ * Keep the two palettes in sync if you change one.
+ *
+ * IMPORTANT — NO @import HERE. @import does NOT work in ST's Custom CSS box: ST injects
+ * the CSS so the @import isn't the first rule in its sheet, which invalidates the WHOLE
+ * sheet (symptom: "the theme does nothing / breaks everything"). The webfonts (Silkscreen
+ * for chrome, VT323 for prose) are loaded by the DungeonState SCRIPT instead (see
+ * FONT_IMPORT_CSS in src/style.ts), so here we just reference them by name. The script must
+ * be loaded for the fonts to appear; otherwise they fall back to monospace.
+ *
+ * Palette: stone-gray base + gold/amber borders + EGA-blue accent (matches src/style.ts).
+ * ===========================================================================*/
+
+:root {
+  --SmartThemeBodyColor: #d8c8a0;          /* parchment text */
+  --SmartThemeEmColor: #f0d878;            /* emphasis -> bright gold */
+  --SmartThemeQuoteColor: #5a7ab8;         /* quotes -> EGA blue */
+  --SmartThemeBlurTintColor: #1c1f26;      /* panel tint -> stone gray */
+  --SmartThemeChatTintColor: #15171c;      /* chat backdrop -> charcoal */
+  --SmartThemeUserMesBlurTintColor: #232730;
+  --SmartThemeBotMesBlurTintColor: #1c1f26;
+  --SmartThemeBorderColor: #c8a84a;        /* gold borders */
+  --SmartThemeShadowColor: #3a3018;
+}
+
+/* readable terminal font for the narration prose (loaded by the script) */
+.mes_text {
+  font-family: 'VT323', monospace;
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+
+/* beveled gold frame on each message -- mirrors the panel chrome */
+#chat .mes {
+  border: 2px solid #c8a84a;
+  border-radius: 2px;
+  box-shadow: inset 2px 2px 0 #8a7a3a, inset -2px -2px 0 #3a3018;
+  background: #1c1f26;
+  margin: 6px 4px;
+}
+
+/* input bar */
+#send_form,
+#send_textarea {
+  background: #1c1f26;
+  color: #d8c8a0;
+  border: 2px solid #c8a84a;
+}
+
+/* pixel font for UI chrome (NOT prose -- it's painful to read paragraphs in it) */
+#top-settings-holder,
+.drawer,
+.mes_buttons,
+#send_form {
+  font-family: 'Silkscreen', monospace;
+}

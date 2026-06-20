@@ -37,6 +37,14 @@ On load you should see in the browser console:
    injected `[CURRENT STATE]` block — not the Phase-1 `DungeonSIM.json`.)
 2. Use a capable model (the preset assumes strong instruction-following).
 
+## 3b. Theme SillyTavern to match (optional, recommended)
+
+The display panel is themed by the script. To make ST's own chat/chrome match it (Gold Box
+look — stone-gray, gold frames, VT323 narration, Silkscreen UI), paste the entire contents of
+**`goldbox-st-theme.css`** into **SillyTavern → User Settings → Custom CSS**. The webfonts are
+loaded by the script (not the CSS), so **do not add an `@import`** — it breaks ST's Custom CSS
+box (the file header explains why).
+
 ## 4. Play
 
 1. Start a **fresh chat**. The state is empty, so the preset's chargen gate fires — roll up a
