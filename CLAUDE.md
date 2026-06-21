@@ -232,7 +232,8 @@ the TTRPG depth layer (§13).
   manifest `{ id: { tags, src } }` of content (base64-inline viable since 8-bit sprites are
   tiny), outside per-chat state. Ship a CC0/licensed pack as default (Gold Box rips are
   copyrighted — fine locally, not redistributable). Gen fallback keeps the cache-once design via
-  ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan.
+  ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan
+  and `DungeonState-M7-spec.md` for the architecture kickoff (seams in place + open questions).
 - **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
   four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
   input) that REPARENTS ST's `#chat` rather than mirroring it. Deliberately last + highest risk:
