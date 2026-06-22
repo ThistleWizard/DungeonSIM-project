@@ -227,6 +227,21 @@ describe('rewind — regenerate / swipe / delete', () => {
     expect(h.hp()).toBe(10);
   });
 
+  it('deleting an AI turn whose predecessor is a snapshotless user message still rolls back', () => {
+    // The real-world shape: index 1 AI snapshot, index 2 USER command (no snapshot), index 3 AI turn.
+    const h = midGame(); // AI snapshot at index 1 (hp 10)
+    h.tl.setLast(2); // a user command sits at index 2 with NO snapshot
+    h.text.set(3, upd("_.add('player.hp.cur', -4);//hit"));
+    h.rt.onMessageReceived(3, 'normal');
+    expect(h.hp()).toBe(6);
+    expect(h.tl.readSnapshot(2)).toBeUndefined(); // user message carries no snapshot
+
+    // Delete the AI message (index 3): new tail is the snapshotless user message at index 2.
+    h.tl.setLast(2);
+    h.rt.onMessageDeleted(3);
+    expect(h.hp()).toBe(10); // rolled back PAST the user message to the index-1 baseline
+  });
+
   it('a normal forward turn needs no baseline reset', () => {
     const h = midGame();
     h.rt.onGenerationStarted('normal'); // must NOT touch chat scope

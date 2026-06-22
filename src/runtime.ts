@@ -171,9 +171,13 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   };
 
   const onMessageDeleted = (_messageId: number): void => {
-    const snap = deps.timeline.readSnapshot('latest');
-    if (snap === undefined) return;
-    writeDungeon(deps.store, snap);
+    // After deletion the new tail is often the USER command that preceded the deleted AI turn,
+    // and user messages carry no snapshot — so reading the exact 'latest' returns undefined and
+    // leaves the deleted turn's mutations in chat scope. Scan back to the nearest snapshot at or
+    // before the new tail (the same baseline logic regenerate/swipe use), falling back to a fresh
+    // dungeon if none remains (deleted back to the start → chargen re-fires).
+    const baseline = baselineBefore(deps.timeline, deps.timeline.lastIndex() + 1) ?? emptyDungeon();
+    writeDungeon(deps.store, baseline);
     refreshInjection();
   };
 
