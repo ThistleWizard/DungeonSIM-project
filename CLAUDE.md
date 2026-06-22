@@ -224,16 +224,30 @@ the TTRPG depth layer (§13).
   `refreshInjection`, and `bootstrap()` registers the panel's `refresh` there — so the panel
   can never disagree with the chat (the §14 M5 dependency, free). Shared `src/style.ts`
   (palette + `panel()` card) keeps all tiles identical; `sheet.ts` refactored onto it.
-- **Next: M7** — sprite system fills the scene window's `data-sprite-slot` hook (added by the restyle). **LIBRARY-first**
-  (reframed with the user; supersedes the earlier generate-and-cache plan). Ladder: **curated
-  tagged sprite pack (primary) → image-gen fallback → text/placeholder**. The model emits tags
-  on a new bestiary type; a PURE resolver matches tags → a concrete sprite (`hash(id)` tie-break
-  for variety) and locks the ref onto the entry. **Pack-agnostic** (decided): the pack is a
-  manifest `{ id: { tags, src } }` of content (base64-inline viable since 8-bit sprites are
-  tiny), outside per-chat state. Ship a CC0/licensed pack as default (Gold Box rips are
-  copyrighted — fine locally, not redistributable). Gen fallback keeps the cache-once design via
-  ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan
-  and `DungeonState-M7-spec.md` for the architecture kickoff (seams in place + open questions).
+- **M7 done (sprite system, LIBRARY-first) — built, unit-tested, partially live-verified.**
+  Fills the scene window's `data-sprite-slot` hook (added by the restyle). Ladder: **curated
+  tagged sprite pack (primary) → image-gen fallback (deferred) → text/placeholder**. `src/pack.ts`
+  — the pack FORMAT (`SpriteEntry`/`SpritePack`) + the controlled vocab the model emits
+  (`ARCHETYPES`/`SIZES`/`DESCRIPTORS`) + a self-contained `DEFAULT_PACK` of inline-SVG silhouettes
+  (two tints per archetype + descriptor variants, so per-instance variety is observable). Pack is
+  CONTENT, not engine — swap the module to ship a different pack (`src`s can be data-URI or URL).
+  `src/sprites.ts` — the PURE resolver: `scoreSprite` (archetype ×10 ≫ descriptor ×1, unknown tags
+  contribute 0), `resolveMobSprite` (top-scorers tie-broken by `hashId(mob.id)` FNV-1a → `pack:<id>`
+  ref, else category-generic, else null), `resolveSprites` (idempotent, deep-clones, locks a `sprite`
+  onto each unresolved mob), `spriteRefToSrc` (ref→`src`; `gen:` deferred→null), and the
+  self-guarding DOM filler `fillSprites` (turns a slot's `data-sprite-ref` into an `<img>`; no-ops
+  without a DOM, so importing under Vitest is harmless). **Schema:** additive/defaulted
+  `bestiary.<type>.tags` (selection at the TYPE level) + `combat.mobs[].sprite` (the locked ref,
+  per INSTANCE) — pre-M7 saves read back `[]`/`null`. **Runtime:** `createRuntime` takes a `pack`
+  (default `DEFAULT_PACK`); in the `MESSAGE_RECEIVED` apply path, `resolveSprites` runs *before*
+  snapshot/footer/injection and persists via `writeDungeon`, so the lock is rewind-stable and all
+  reads see the same state. **Display:** the viewport emits the locked ref into `data-sprite-ref`
+  (read straight from the faced mob; empty in darkness / nothing faced); `bootstrapDisplay` takes
+  the pack and calls `fillSprites` after every render → rides every refresh/rewind. **Preset:**
+  bestiary rule 5 now teaches the model to emit `tags:[<descriptors>]` (archetype first) from the
+  full vocabulary with examples. Pack-agnostic + cache-once gen fallback stay as designed (§15);
+  see `DungeonState-M7-spec.md`. **Live in ST:** silhouette appears in the viewport, sprite lock
+  holds across swipes (confirmed); full ladder/variety pass still to do.
 - **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
   four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
   input) that REPARENTS ST's `#chat` rather than mirroring it. Deliberately last + highest risk:
@@ -286,3 +300,24 @@ Runtime glue (event hooks reading/writing chat-scope vars) builds a `VariableSto
   only flips `lit` and moves the torch. This kills tick-drift and makes snuff/relight and
   lay-down-while-it-keeps-burning work. (Migration: an in-progress save with a lit torch in the
   old `light` block but no `lit` item goes dark next turn — relight it.)
+- **Ambient room light** (additive engine work): `RoomSchema.ambient_light` is a *string* —
+  non-empty DESCRIBES a room's own light (a shaft of daylight, lava glow, a perpetual
+  altar-flame) and lights it with no torch and no fuel cost; `''` (default) = ordinary dark
+  room. `deriveLight` falls back to ambient when nothing is carried/lit, emitting the
+  description as the `light.source` with `ticks_remaining: null` (fuel-less → never counts
+  down; the `light.ticks_remaining` schema field is now nullable, and footer/inject omit the
+  "(N left)" when null). A carried/here lit source still wins over ambient. Set at room
+  creation via `_.assign` only (it's not in the rule-4 mutable-subfields whitelist). The preset
+  seeds R01 with `ambient_light` (starting room always lit + a "your torches are unlit" hint)
+  and lets the model add it to any room it authors. Additive + defaulted ⇒ old saves read dark.
+- **Death drops corpses (script-owned)**: `applyDeaths` (post-apply pass, runs before the light
+  economy) converts any combat mob the model marked `status:'dead'` into a `kind:'corpse'`
+  Item in the player's current room `contents`, then removes it from `combat.mobs`. Idempotent
+  (won't duplicate an existing `<id>_corpse`). Fleeing/despawn stays a plain `_.remove` (no
+  body), so ONLY an explicit death-mark drops a corpse — the "a slain thing leaves a body"
+  bookkeeping no longer depends on the model remembering it (the playtest bug: a killed goblin
+  left no corpse because nothing told the model — or the script — to make one). Loot stays
+  model-driven via **lazy reveal**: the fresh corpse holds nothing; when the player SEARCHES a
+  body the model `_.insert`s what it carried into the room's contents (takeable, shown in
+  `Here:`) — never straight into inventory. Split along the project's line: script owns *the
+  body exists*, model owns *what's on it*. Preset rule 6 + the Death section teach this.

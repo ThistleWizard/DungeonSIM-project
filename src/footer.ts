@@ -39,7 +39,9 @@ export function renderFooter(d: Dungeon): string {
   const lit = !!d.light;
   const lines: string[] = [];
 
-  lines.push(lit ? `Light: ${d.light!.source} (${d.light!.ticks_remaining} left)` : 'Light: none - you stand in darkness');
+  // Ambient room light has no ticks (null) — show just the source, no "(N left)".
+  const tr = d.light?.ticks_remaining;
+  lines.push(lit ? `Light: ${d.light!.source}${tr == null ? '' : ` (${tr} left)`}` : 'Light: none - you stand in darkness');
 
   const exits = Object.entries(room.exits ?? {}).map(([dir, e]) => {
     const state = e.state && e.state !== 'open' ? `, ${e.state}` : '';
