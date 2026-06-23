@@ -177,7 +177,7 @@ the TTRPG depth layer (§13).
   rendered from applied state, not hand-computed from the pre-turn `[CURRENT STATE]`). The
   preset's TASK 10 was updated to match (footer instruction removed; `<UpdateDungeon>` marked
   the non-optional final emission, with a malformed-turn guard).
-- **M6 done (automap, see `DungeonState-M6-spec.md`)** — `src/map.ts` (`renderMap`, pure:
+- **M6 done (automap)** — `src/map.ts` (`renderMap`, pure:
   grid-walk layout from the `rooms` graph → 8-bit SVG of the current depth; deterministic +
   stable coordinates, current-room amber highlight, undiscovered-exit `?` stubs,
   vertical/portal markers, `data-room-id`/`<title>` hooks for M8) + exported `computeLayout`
@@ -245,8 +245,8 @@ the TTRPG depth layer (§13).
   (read straight from the faced mob; empty in darkness / nothing faced); `bootstrapDisplay` takes
   the pack and calls `fillSprites` after every render → rides every refresh/rewind. **Preset:**
   bestiary rule 5 now teaches the model to emit `tags:[<descriptors>]` (archetype first) from the
-  full vocabulary with examples. Pack-agnostic + cache-once gen fallback stay as designed (§15);
-  see `DungeonState-M7-spec.md`. **Live in ST:** silhouette appears in the viewport, sprite lock
+  full vocabulary with examples. Pack-agnostic + cache-once gen fallback stay as designed (§15).
+  **Live in ST:** silhouette appears in the viewport, sprite lock
   holds across swipes (confirmed); full ladder/variety pass still to do.
 - **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
   four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
