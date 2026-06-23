@@ -32,6 +32,10 @@ function prettyType(type: string): string {
  * darkness.
  */
 export function renderFooter(d: Dungeon): string {
+  // The dead get no status footer. A death turn ends with an epitaph + a new-character prompt;
+  // a Light/Exits/Here line for a player who just died (hp 0) reads as incoherent noise.
+  if ((d.player?.hp?.cur ?? 1) <= 0) return '';
+
   const loc = d.player?.location;
   const room = loc ? d.rooms?.[loc] : undefined;
   if (!room) return '';
