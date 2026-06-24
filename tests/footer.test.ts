@@ -69,6 +69,11 @@ describe('renderFooter', () => {
   it('returns empty string before a room exists (chargen/seed state)', () => {
     expect(renderFooter(DungeonSchema.parse({}))).toBe('');
   });
+
+  it('returns empty string on a death turn (player at 0 HP — no status for the dead)', () => {
+    const d = dungeon({ player: { hp: { cur: 0, max: 9 }, location: 'R04' }, light: { source: 'Torch', ticks_remaining: 10 } });
+    expect(renderFooter(d)).toBe('');
+  });
 });
 
 describe('embedFooter', () => {

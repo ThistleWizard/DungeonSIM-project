@@ -407,3 +407,145 @@ describe('skill rank-up rollover (script-owned)', () => {
     expect(skill(r, 'lockpicking')).toEqual({ rank: 0, marks: 1, marks_needed: 3 });
   });
 });
+
+describe('move with a count (partial take/drop, script-owned conservation)', () => {
+  const stocked = () =>
+    DungeonSchema.parse({
+      player: { location: 'R01' },
+      inventory: [],
+      rooms: {
+        R01: { id: 'R01', name: 'Storeroom', contents: [{ id: 'clay_jar', name: 'Clay Jar', qty: 3 }] },
+      },
+    });
+
+  it('takes N of a stack: source decrements, destination gets exactly N (total conserved)', () => {
+    const r = applyCommands(stocked(), [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 1])]);
+    expect(r.dungeon.rooms.R01.contents.find(i => i.id === 'clay_jar')!.qty).toBe(2); // 3 - 1
+    expect(r.dungeon.inventory.find(i => i.id === 'clay_jar')!.qty).toBe(1);
+    // conservation: 2 in room + 1 in pack = the original 3, never inflated to 4
+    expect(r.dungeon.rooms.R01.contents.find(i => i.id === 'clay_jar')!.qty + r.dungeon.inventory[0].qty).toBe(3);
+  });
+
+  it('a second partial take MERGES into the existing pack stack (no duplicate id)', () => {
+    const once = applyCommands(stocked(), [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 1])]);
+    const twice = applyCommands(once.dungeon, [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 1])]);
+    expect(twice.dungeon.inventory.filter(i => i.id === 'clay_jar')).toHaveLength(1); // merged, not duped
+    expect(twice.dungeon.inventory.find(i => i.id === 'clay_jar')!.qty).toBe(2);
+    expect(twice.dungeon.rooms.R01.contents.find(i => i.id === 'clay_jar')!.qty).toBe(1);
+  });
+
+  it('a count >= the stack moves the whole object (source entry removed)', () => {
+    const r = applyCommands(stocked(), [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 3])]);
+    expect(r.dungeon.rooms.R01.contents.find(i => i.id === 'clay_jar')).toBeUndefined();
+    expect(r.dungeon.inventory.find(i => i.id === 'clay_jar')!.qty).toBe(3);
+  });
+
+  it('blocks a count of 0 or above the stack (never over-moves or inflates)', () => {
+    const zero = applyCommands(stocked(), [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 0])]);
+    expect(zero.blocked).toHaveLength(1);
+    expect(zero.dungeon.inventory).toHaveLength(0); // nothing moved
+    const over = applyCommands(stocked(), [cmd('move', 'rooms.R01.contents.clay_jar', ['inventory', 5])]);
+    expect(over.blocked).toHaveLength(1);
+    expect(over.dungeon.rooms.R01.contents.find(i => i.id === 'clay_jar')!.qty).toBe(3); // untouched
+  });
+
+  it('a count is ignored for a light source — the whole lit torch moves with fuel intact', () => {
+    const d = DungeonSchema.parse({
+      player: { location: 'R01' },
+      inventory: [{ id: 'torch_1', name: 'Torch', fuel: 40, lit: true }],
+      rooms: { R01: { id: 'R01', name: 'Cell', contents: [] } },
+    });
+    const r = applyCommands(d, [cmd('move', 'inventory.torch_1', ['rooms.R01.contents', 1])]);
+    expect(r.dungeon.inventory.find(i => i.id === 'torch_1')).toBeUndefined(); // whole torch left
+    const onFloor = r.dungeon.rooms.R01.contents.find(i => i.id === 'torch_1')!;
+    expect(onFloor.lit).toBe(true);
+    expect(onFloor.fuel).toBe(40); // not split, fuel intact
+  });
+});
+
+describe('ambient room light (script-owned)', () => {
+  const ambient = (light = 'a shaft of pale daylight') =>
+    DungeonSchema.parse({
+      meta: { turn: 0 },
+      player: { location: 'R01' },
+      inventory: [],
+      rooms: { R01: { id: 'R01', name: 'Threshold', contents: [], ambient_light: light } },
+    });
+
+  it('lights the room with no torch and no ticks (null = fuel-less)', () => {
+    const r = applyCommands(ambient(), [cmd('add', 'meta.turn', [1])]);
+    expect(r.dungeon.light).toEqual({ source: 'a shaft of pale daylight', ticks_remaining: null });
+  });
+
+  it('never counts down across a time-skip', () => {
+    const r = applyCommands(ambient(), [cmd('add', 'meta.turn', [50])]);
+    expect(r.dungeon.light).toEqual({ source: 'a shaft of pale daylight', ticks_remaining: null });
+  });
+
+  it('an empty ambient_light string is an ordinary dark room', () => {
+    const r = applyCommands(ambient(''), [cmd('add', 'meta.turn', [1])]);
+    expect(r.dungeon.light).toBeNull();
+  });
+
+  it('a carried lit torch (with fuel/ticks) takes precedence over ambient light', () => {
+    const d = DungeonSchema.parse({
+      meta: { turn: 0 },
+      player: { location: 'R01' },
+      inventory: [{ id: 'torch_1', name: 'Torch', fuel: 60, lit: true }],
+      rooms: { R01: { id: 'R01', name: 'Threshold', contents: [], ambient_light: 'lava glow' } },
+    });
+    const r = applyCommands(d, [cmd('add', 'meta.turn', [1])]);
+    expect(r.dungeon.light).toEqual({ source: 'Torch', ticks_remaining: 59 });
+  });
+});
+
+describe('death resolution (script-owned corpses)', () => {
+  const fight = (status = '') =>
+    DungeonSchema.parse({
+      player: { location: 'R01' },
+      rooms: { R01: { id: 'R01', name: 'Crypt', contents: [] } },
+      combat: {
+        active: true,
+        mobs: [
+          { id: 'goblin_1', type: 'goblin', name: 'Goblin', hp_cur: 0, hp_max: 8, status },
+          { id: 'goblin_2', type: 'goblin', name: 'Goblin', hp_cur: 5, hp_max: 8 },
+        ],
+      },
+    });
+
+  it("a mob marked status:'dead' becomes a corpse in the current room and leaves combat", () => {
+    const r = applyCommands(fight(), [cmd('set', 'combat.mobs.goblin_1.status', ['', 'dead'])]);
+    expect(r.dungeon.combat.mobs.map(m => m.id)).toEqual(['goblin_2']); // dead mob removed
+    const corpse = r.dungeon.rooms.R01.contents.find(c => c.id === 'goblin_1_corpse')!;
+    expect(corpse).toBeDefined();
+    expect(corpse.kind).toBe('corpse');
+    expect(corpse.name).toBe('Goblin corpse');
+  });
+
+  it('the fresh corpse carries no enumerated loot (lazy reveal at search time)', () => {
+    const r = applyCommands(fight(), [cmd('set', 'combat.mobs.goblin_1.status', ['', 'dead'])]);
+    const corpse = r.dungeon.rooms.R01.contents.find(c => c.id === 'goblin_1_corpse')!;
+    expect(corpse.notes).toBe('');
+    expect(r.dungeon.rooms.R01.contents).toHaveLength(1); // only the body, nothing else
+  });
+
+  it('fleeing/despawn via _.remove leaves NO corpse', () => {
+    const r = applyCommands(fight(), [cmd('remove', 'combat.mobs', ['goblin_1'])]);
+    expect(r.dungeon.combat.mobs.map(m => m.id)).toEqual(['goblin_2']);
+    expect(r.dungeon.rooms.R01.contents).toHaveLength(0); // no body — it fled
+  });
+
+  it('is idempotent — re-applying does not duplicate the corpse', () => {
+    const once = applyCommands(fight(), [cmd('set', 'combat.mobs.goblin_1.status', ['', 'dead'])]);
+    // Re-introduce a same-id dead mob; the existing corpse must not be duplicated.
+    const seeded = DungeonSchema.parse({
+      ...once.dungeon,
+      combat: {
+        active: true,
+        mobs: [{ id: 'goblin_1', type: 'goblin', name: 'Goblin', hp_cur: 0, hp_max: 8, status: 'dead' }],
+      },
+    });
+    const twice = applyCommands(seeded, []);
+    expect(twice.dungeon.rooms.R01.contents.filter(c => c.id === 'goblin_1_corpse')).toHaveLength(1);
+  });
+});

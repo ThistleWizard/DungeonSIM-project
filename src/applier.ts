@@ -17,7 +17,7 @@
  * call the injected logger. Never throw, never corrupt the tree.
  */
 import _ from 'lodash';
-import type { Dungeon, Item } from './schema.js';
+import { ItemSchema, type Dungeon, type Item } from './schema.js';
 import type { Command } from './types.js';
 
 export interface ApplyOptions {
@@ -391,10 +391,14 @@ function lightContainers(d: Dungeon): Item[][] {
 function deriveLight(d: Dungeon): Dungeon['light'] {
   const carried = (d.inventory ?? []).find(isLitSource);
   const loc = d.player?.location;
-  const here = loc ? (d.rooms?.[loc]?.contents ?? []).find(isLitSource) : undefined;
+  const room = loc ? d.rooms?.[loc] : undefined;
+  const here = room ? (room.contents ?? []).find(isLitSource) : undefined;
   const src = carried ?? here;
-  if (!src) return null;
-  return { source: src.name ?? 'light', ticks_remaining: src.fuel as number };
+  if (src) return { source: src.name ?? 'light', ticks_remaining: src.fuel as number };
+  // Ambient room light (a shaft of daylight, lava glow, a perpetual flame): the room itself is
+  // lit, with no consumable source — so no ticks. The description doubles as the Light source.
+  if (room?.ambient_light) return { source: room.ambient_light, ticks_remaining: null };
+  return null;
 }
 
 /**
@@ -424,10 +428,69 @@ function applyLight(d: Dungeon, turnDelta: number, ctx: Ctx): void {
 }
 
 /**
+ * Script-owned death resolution: any combat mob the model has marked `status:'dead'` leaves a
+ * CORPSE object in the player's current room and is then removed from combat. This is the
+ * mechanical "a slain thing leaves a body" — exactly the forgettable bookkeeping that must not
+ * depend on the model remembering to emit it. Loot is DEFERRED: the fresh corpse carries nothing;
+ * the model fills the room's contents with what it held when the body is searched (lazy reveal).
+ * Fleeing/despawning a mob stays a plain `_.remove`, so ONLY an explicit death-mark drops a body.
+ * Idempotent: a corpse id already present is not duplicated.
+ */
+function applyDeaths(d: Dungeon, ctx: Ctx): void {
+  const mobs = d.combat?.mobs;
+  if (!Array.isArray(mobs) || mobs.length === 0) return;
+  const loc = d.player?.location;
+  const room = loc ? d.rooms?.[loc] : undefined;
+  for (let i = mobs.length - 1; i >= 0; i--) {
+    const mob = mobs[i];
+    if (!mob || mob.status !== 'dead') continue;
+    mobs.splice(i, 1);
+    if (room && Array.isArray(room.contents)) {
+      const corpseId = `${mob.id}_corpse`;
+      if (!room.contents.some(c => c && (c as Item).id === corpseId)) {
+        room.contents.push(
+          ItemSchema.parse({ id: corpseId, name: `${mob.name} corpse`, kind: 'corpse' }),
+        );
+      }
+      ctx.log(`${mob.name} slain — corpse left in ${room.name ?? loc}`);
+    } else {
+      ctx.log(`${mob.name} slain (no current room to leave a corpse in)`);
+    }
+  }
+}
+
+/** A stackable (non-light) object: not a light source, so it may be split/merged by qty. */
+const isStackable = (it: unknown): it is Item => _.isObject(it) && (it as Item).fuel == null;
+
+/**
+ * Add `count` of a stackable proto into a destination array — MERGING into an existing same-id
+ * stack (so partial/whole moves can't leave duplicate ids that break id-addressing), else pushing
+ * a fresh, un-equipped clone at qty=count. Conserves quantity on the destination side.
+ */
+function mergeOrPush(dest: Item[], proto: Item, count: number): void {
+  const existing = dest.find(x => isStackable(x) && (x as Item).id === proto.id);
+  if (existing) {
+    (existing as Item).qty = ((existing as Item).qty ?? 1) + count;
+    return;
+  }
+  const clone = _.cloneDeep(proto);
+  clone.qty = count;
+  clone.equipped = false;
+  clone.worn = false;
+  dest.push(clone);
+}
+
+/**
  * Relocate an array element between two array containers, preserving its full state — the
  * primitive behind drop / pick up / stash. `_.move('inventory.torch_1', 'rooms.R05.contents')`.
  * The object moves intact (a lit torch keeps its live, script-owned fuel), which is exactly why
  * the model can't do this with remove+insert. Leaving a slot un-equips the item.
+ *
+ * An optional third arg is a COUNT: `_.move('rooms.R02.contents.clay_jars', 'inventory', 1)` takes
+ * just 1 of a stack — the script decrements the source stack and merges into a same-id stack at
+ * the destination, so "take/drop N of M" is one verb the model can't desync. A count is ignored
+ * for light sources (they don't stack); a count ≥ the stack moves the whole object; a count ≤ 0 or
+ * above the stack is blocked.
  */
 function applyMove(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const fromPath = cmd.path;
@@ -445,10 +508,39 @@ function applyMove(d: Dungeon, cmd: Command, ctx: Ctx): void {
   const dest = _.get(d, toSeg);
   if (!Array.isArray(dest)) return ctx.block(cmd, `move: destination '${toPath}' is not an array`);
 
-  const [item] = parent.splice(lastIdx, 1);
+  const item = parent[lastIdx] as Item;
+  const stackable = isStackable(item);
+  const haveQty = _.isObject(item) && typeof item.qty === 'number' ? item.qty : 1;
+  const count = typeof cmd.args[1] === 'number' ? Math.floor(cmd.args[1]) : null;
+
+  // PARTIAL move: a positive count below the stack size, on a non-light stack.
+  if (count !== null && stackable) {
+    if (count <= 0 || count > haveQty) {
+      return ctx.block(cmd, `move: invalid count ${count} for '${fromPath}' (have ${haveQty})`);
+    }
+    if (count < haveQty) {
+      item.qty = haveQty - count;
+      mergeOrPush(dest as Item[], item, count);
+      ctx.log(`moved ${count}x ${fmt(item.id)}: ${fromPath} -> ${toPath}${reasonSuffix(cmd)}`);
+      return;
+    }
+    // count === haveQty → fall through to a whole move.
+  }
+
+  // WHOLE move: relocate the actual object intact (a lit torch keeps its live fuel).
+  parent.splice(lastIdx, 1);
   if (_.isObject(item)) {
     (item as Item).equipped = false; // a dropped/stashed object isn't in a wield/wear slot
     (item as Item).worn = false;
+  }
+  // Merge a whole stackable move into an existing same-id stack at the destination (no dup ids).
+  if (stackable) {
+    const existing = (dest as Item[]).find(x => isStackable(x) && (x as Item).id === item.id);
+    if (existing) {
+      (existing as Item).qty = ((existing as Item).qty ?? 1) + haveQty;
+      ctx.log(`moved ${fmt(item.id)} (x${haveQty}): ${fromPath} -> ${toPath}${reasonSuffix(cmd)}`);
+      return;
+    }
   }
   dest.push(item);
   ctx.log(`moved ${fmt(_.isObject(item) ? (item as Item).id : item)}: ${fromPath} -> ${toPath}${reasonSuffix(cmd)}`);
@@ -542,6 +634,10 @@ export function applyCommands(input: Dungeon, commands: Command[], opts: ApplyOp
         break;
     }
   }
+
+  // Script-owned death resolution: turn any mob the model marked `status:'dead'` into a corpse
+  // in the current room and drop it from combat. Runs after the model's mutations, before light.
+  applyDeaths(d, ctx);
 
   // Script-owned light economy: burn lit sources by however many turns passed this update,
   // then re-derive the authoritative `light` block. Runs once, after the model's mutations.

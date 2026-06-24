@@ -28,6 +28,8 @@ import { makeStore, processMessage, renderInjection, writeDungeon, type Variable
 import { bootstrapCommands } from './commands.js';
 import { bootstrapDisplay } from './display.js';
 import { embedFooter, renderFooter } from './footer.js';
+import { resolveSprites } from './sprites.js';
+import { DEFAULT_PACK, type SpritePack } from './pack.js';
 
 /** Shape of a Tavern Helper prompt injection (subset of its InjectionPrompt we use). */
 export interface InjectPrompt {
@@ -62,6 +64,8 @@ export interface RuntimeDeps {
   /** Tavern Helper `injectPrompts`. */
   injectPrompts: (prompts: InjectPrompt[], options?: { once?: boolean }) => unknown;
   events: RuntimeEvents;
+  /** Sprite pack the resolver locks against (M7). Defaults to the bundled pack. */
+  pack?: SpritePack;
   /** Logger for blocked/desync notes (default no-op). */
   warn?: (msg: string) => void;
 }
@@ -100,6 +104,7 @@ const SKIP_RECEIVED_TYPES = new Set(['quiet', 'impersonate', 'continue', 'append
  */
 export function createRuntime(deps: RuntimeDeps): Runtime {
   const warn = deps.warn ?? (() => {});
+  const pack = deps.pack ?? DEFAULT_PACK;
   // Listeners fired after every state-changing refresh (per-turn apply + every rewind path).
   const refreshListeners: Array<() => void> = [];
 
@@ -125,6 +130,15 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   const onMessageReceived = (messageId: number, type: string): ApplyResult | undefined => {
     if (SKIP_RECEIVED_TYPES.has(type)) return undefined;
     const result = processMessage(deps.store, deps.getMessageText(messageId), { warn });
+    // M7: lock a sprite onto any newly-introduced combat mob (pure, idempotent). When it
+    // changes the tree, persist the resolved version so the lock survives and the snapshot/
+    // footer/injection all read the SAME state. resolveSprites returns its input unchanged on
+    // non-combat turns, so this adds no write then.
+    const resolved = resolveSprites(result.dungeon, pack);
+    if (resolved !== result.dungeon) {
+      writeDungeon(deps.store, resolved);
+      result.dungeon = resolved;
+    }
     // Snapshot the post-turn state onto this exact message/swipe so the timeline owns it.
     deps.timeline.writeSnapshot(messageId, result.dungeon);
     // Render the MUD status footer from the APPLIED state and embed it into the message — the
@@ -157,9 +171,13 @@ export function createRuntime(deps: RuntimeDeps): Runtime {
   };
 
   const onMessageDeleted = (_messageId: number): void => {
-    const snap = deps.timeline.readSnapshot('latest');
-    if (snap === undefined) return;
-    writeDungeon(deps.store, snap);
+    // After deletion the new tail is often the USER command that preceded the deleted AI turn,
+    // and user messages carry no snapshot — so reading the exact 'latest' returns undefined and
+    // leaves the deleted turn's mutations in chat scope. Scan back to the nearest snapshot at or
+    // before the new tail (the same baseline logic regenerate/swipe use), falling back to a fresh
+    // dungeon if none remains (deleted back to the start → chargen re-fires).
+    const baseline = baselineBefore(deps.timeline, deps.timeline.lastIndex() + 1) ?? emptyDungeon();
+    writeDungeon(deps.store, baseline);
     refreshInjection();
   };
 
@@ -273,12 +291,14 @@ function bootstrap(): void {
         MESSAGE_SWIPED: te.MESSAGE_SWIPED ?? 'message_swiped',
         MESSAGE_DELETED: te.MESSAGE_DELETED ?? 'message_deleted',
       },
+      pack: DEFAULT_PACK,
       warn,
     });
     // M6+: register the player-facing view commands (/map, /character, /inventory).
     bootstrapCommands(store, warn);
     // M8: mount the live Gold Box display panel and refresh it on every state change/rewind.
-    const refreshDisplay = bootstrapDisplay(store, warn);
+    // M7: the panel's viewport fills its sprite slot from the same pack the runtime locks against.
+    const refreshDisplay = bootstrapDisplay(store, DEFAULT_PACK, warn);
     if (refreshDisplay) runtime.onRefresh(refreshDisplay);
     console.info(
       '[DungeonState] runtime initialised (chat-scope state, message-scope rewind, [CURRENT STATE] injection, /map /character /inventory, Gold Box display panel).',

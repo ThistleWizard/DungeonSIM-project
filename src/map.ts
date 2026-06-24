@@ -1,7 +1,7 @@
 /**
  * map.ts — the automap renderer (milestone M6). A PURE function: no SillyTavern,
  * no globals, fully unit-testable. Turns the canonical `dungeon.rooms` graph into a
- * clean 8-bit SVG automap of the CURRENT depth. See DungeonState-M6-spec.md.
+ * clean 8-bit SVG automap of the CURRENT depth.
  *
  * Three hard rules drive the design:
  *  - Grid-walk layout (§spec B2): deterministic + STABLE — same input → byte-identical

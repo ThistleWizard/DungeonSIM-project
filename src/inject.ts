@@ -19,7 +19,12 @@ export function formatStateBlock(d: Dungeon): string {
   const lines: string[] = ['[CURRENT STATE — authoritative, obey over your own memory]'];
 
   const m = d.meta ?? ({} as Dungeon['meta']);
-  const light = d.light ? `${d.light.source} (${d.light.ticks_remaining})` : 'none';
+  // Ambient room light has no ticks (null) — show just the source.
+  const light = d.light
+    ? d.light.ticks_remaining == null
+      ? d.light.source
+      : `${d.light.source} (${d.light.ticks_remaining})`
+    : 'none';
   lines.push(`Turn ${m?.turn ?? 0} | Depth ${m?.depth ?? 1} | Light: ${light}`);
 
   const loc = d.player?.location;
