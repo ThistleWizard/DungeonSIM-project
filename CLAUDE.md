@@ -163,7 +163,13 @@ the TTRPG depth layer (§13).
   `readDungeon`/`writeDungeon` (namespaced chat-scope restore). Unit-tested incl. the
   no-double-apply regenerate case, and **verified live in SillyTavern**: swipe-forward,
   swipe-back, and delete all restore correct HP — confirming `GENERATION_STARTED` reports the
-  generation type on the target build, so the baseline rollback fires.
+  generation type on the target build, so the baseline rollback fires. A follow-up fix
+  (`37e1a2e`) rolls the baseline back PAST a snapshotless user message on delete, so deleting
+  an AI turn whose predecessor is the player's command no longer leaves that turn's mutations
+  in chat scope; re-running the command sees the pre-turn state. **Re-verified live** (M7
+  session): delete-then-rerun rolls back room/HP/contents cleanly. The M7-session engine work
+  (script-owned corpses + lazy loot on search, ambient room light, stack-quantity
+  conservation) is also **live-verified**.
 - **M1–M5 verified live.** State persists, the §5 invariants hold, drift is gone, and rewind
   is safe in the real app. The every-turn MUD status footer (`Light:`/`Exits:`/`Here:`;
   contents concealed in darkness) is now **script-owned** (`src/footer.ts`, the "option B"
@@ -246,8 +252,9 @@ the TTRPG depth layer (§13).
   the pack and calls `fillSprites` after every render → rides every refresh/rewind. **Preset:**
   bestiary rule 5 now teaches the model to emit `tags:[<descriptors>]` (archetype first) from the
   full vocabulary with examples. Pack-agnostic + cache-once gen fallback stay as designed (§15).
-  **Live in ST:** silhouette appears in the viewport, sprite lock
-  holds across swipes (confirmed); full ladder/variety pass still to do.
+  **Live-verified in ST:** silhouettes render per faced mob, same-type mobs get distinct
+  silhouettes (hash variety) that stay stable turn-to-turn, descriptors shift the art, the
+  lock holds across swipes, and darkness / nothing-faced shows an empty viewport. M7 PASSED.
 - **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
   four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
   input) that REPARENTS ST's `#chat` rather than mirroring it. Deliberately last + highest risk:
