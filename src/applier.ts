@@ -455,6 +455,42 @@ function applyMove(d: Dungeon, cmd: Command, ctx: Ctx): void {
 }
 
 /**
+ * Script-owned skill progression (§5 invariant 3): roll accumulated use-marks into rank-ups.
+ * The model only ever increments `marks`; the SCRIPT decides when those become a rank — never
+ * trust the model to rank up (in live play it simply forgot to). Each rank costs `3 + 2*rank`
+ * marks; excess marks roll OVER into the next rank, so a big single-turn gain can chain several
+ * rank-ups at once. Rank caps at 5, where marks are clamped to the (now unreachable) threshold so
+ * a maxed skill reads e.g. 13/13. `marks_needed` is always recomputed from rank, so a stale or
+ * model-seeded value self-heals. Runs after the model's mutations, like the light economy.
+ */
+function applySkillRanks(d: Dungeon, ctx: Ctx): void {
+  const skills = d.player?.skills;
+  if (!skills || typeof skills !== 'object') return;
+  const MAX_RANK = 5;
+  for (const [name, skill] of Object.entries(skills)) {
+    if (!skill || typeof skill !== 'object') continue;
+    const s = skill as { rank?: number; marks?: number; marks_needed?: number };
+    let rank = typeof s.rank === 'number' ? s.rank : 0;
+    let marks = typeof s.marks === 'number' ? s.marks : 0;
+    let needed = 3 + 2 * rank;
+    while (marks >= needed && rank < MAX_RANK) {
+      marks -= needed; // roll the excess over, don't reset to 0
+      rank += 1;
+      needed = 3 + 2 * rank; // recompute the next threshold
+      ctx.log(`rank up: ${name} → rank ${rank}`);
+    }
+    if (rank >= MAX_RANK) {
+      rank = MAX_RANK;
+      needed = 3 + 2 * MAX_RANK; // 13
+      if (marks > needed) marks = needed; // maxed: clamp, never overflow
+    }
+    s.rank = rank;
+    s.marks = marks;
+    s.marks_needed = needed;
+  }
+}
+
+/**
  * Apply a list of commands to a dungeon tree. Pure: the input is deep-cloned and
  * never mutated; the new tree is returned in `result.dungeon`.
  */
@@ -512,6 +548,9 @@ export function applyCommands(input: Dungeon, commands: Command[], opts: ApplyOp
   const oldTurn = typeof input.meta?.turn === 'number' ? input.meta.turn : 0;
   const newTurn = typeof d.meta?.turn === 'number' ? d.meta.turn : oldTurn;
   applyLight(d, Math.max(0, newTurn - oldTurn), ctx);
+
+  // Script-owned skill progression: roll accumulated marks into rank-ups (§5 invariant 3).
+  applySkillRanks(d, ctx);
 
   return { dungeon: d, delta_log: d.delta_log, blocked, desync };
 }

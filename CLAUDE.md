@@ -142,6 +142,13 @@ the TTRPG depth layer (§13).
 - **M2 done** — `src/parser.ts` (`extractCommands`), `src/types.ts` (`Command`).
 - **M3 done** — `src/applier.ts` (`applyCommands`, pure) + `src/store.ts`
   (`processMessage`, `makeStore`, behind an injectable `VariableStore`).
+  - **Skill rank-up rollover** (the second half of §5 invariant 3, found unbuilt during M7
+    live-testing and added on branch `skill-rankup`): `applySkillRanks`, a post-apply pass
+    (runs alongside the light economy) that rolls accumulated `marks` into `rank` — the model
+    only ever increments `marks`, the SCRIPT decides the rank-up. Each rank costs `3 + 2*rank`
+    marks; excess rolls OVER (a big single-turn gain chains multiple rank-ups); caps at rank 5
+    (marks clamped to 13/13); `marks_needed` is always recomputed from rank (self-heals stale
+    saves). Before this, marks sat full forever and the sheet's rank dots never advanced.
 - **M4 done** — `src/inject.ts` (`formatStateBlock`, the thinned §6 block) +
   `renderInjection` in store.ts. Preset forked to `DungeonSIM-Phase2.json` (v0.2.0) via
   `tools/build-phase2-preset.py` (non-destructive; Phase 1 `DungeonSIM.json` untouched):
