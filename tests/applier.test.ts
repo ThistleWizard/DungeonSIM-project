@@ -345,6 +345,69 @@ describe('light economy (script-owned) + move', () => {
   });
 });
 
+describe('skill rank-up rollover (script-owned)', () => {
+  // marks_needed = 3 + 2*rank → rank 0:3, 1:5, 2:7, 3:9, 4:11, 5:13.
+  const withSkills = (skills: Record<string, { rank?: number; marks?: number; marks_needed?: number }>) =>
+    DungeonSchema.parse({ player: { skills } });
+  const skill = (r: ReturnType<typeof applyCommands>, name: string) => r.dungeon.player.skills[name];
+
+  it('leaves a skill below its threshold untouched', () => {
+    const r = applyCommands(withSkills({ melee: { rank: 1, marks: 4, marks_needed: 5 } }), []);
+    expect(skill(r, 'melee')).toEqual({ rank: 1, marks: 4, marks_needed: 5 });
+  });
+
+  it('ranks up and rolls the excess to 0 when exactly at threshold', () => {
+    const r = applyCommands(withSkills({ melee: { rank: 1, marks: 5, marks_needed: 5 } }), []);
+    expect(skill(r, 'melee')).toEqual({ rank: 2, marks: 0, marks_needed: 7 });
+  });
+
+  it('carries the excess marks over a rank-up', () => {
+    const r = applyCommands(withSkills({ melee: { rank: 1, marks: 6, marks_needed: 5 } }), []);
+    expect(skill(r, 'melee')).toEqual({ rank: 2, marks: 1, marks_needed: 7 });
+  });
+
+  it('chains multiple rank-ups in a single pass (3→r1, 5→r2, 7→r3)', () => {
+    const r = applyCommands(withSkills({ melee: { rank: 0, marks: 20, marks_needed: 3 } }), []);
+    expect(skill(r, 'melee')).toEqual({ rank: 3, marks: 5, marks_needed: 9 }); // 20-3-5-7=5, 5<9
+  });
+
+  it('caps at rank 5 and clamps marks to 13/13, terminating cleanly', () => {
+    const r = applyCommands(withSkills({ melee: { rank: 4, marks: 100, marks_needed: 11 } }), []);
+    expect(skill(r, 'melee')).toEqual({ rank: 5, marks: 13, marks_needed: 13 });
+  });
+
+  it('is idempotent — a second pass over settled skills changes nothing', () => {
+    const r1 = applyCommands(withSkills({ melee: { rank: 1, marks: 6, marks_needed: 5 } }), []);
+    const r2 = applyCommands(r1.dungeon, []);
+    expect(r2.dungeon.player.skills).toEqual(r1.dungeon.player.skills);
+  });
+
+  it('rolls each skill independently in one pass', () => {
+    const r = applyCommands(
+      withSkills({
+        melee: { rank: 1, marks: 5, marks_needed: 5 }, // → rank 2, 0/7
+        stealth: { rank: 0, marks: 1, marks_needed: 3 }, // unchanged
+      }),
+      [],
+    );
+    expect(skill(r, 'melee')).toEqual({ rank: 2, marks: 0, marks_needed: 7 });
+    expect(skill(r, 'stealth')).toEqual({ rank: 0, marks: 1, marks_needed: 3 });
+  });
+
+  it('composes with the model add: a mark that crosses the threshold ranks up the same turn', () => {
+    const d = withSkills({ melee: { rank: 1, marks: 4, marks_needed: 5 } });
+    const r = applyCommands(d, [cmd('add', 'player.skills.melee.marks', [1], 'a telling blow')]);
+    expect(skill(r, 'melee')).toEqual({ rank: 2, marks: 0, marks_needed: 7 });
+    expect(r.delta_log.some(l => /rank up: melee/.test(l))).toBe(true);
+  });
+
+  it('tolerates an ad-hoc skill created by add (no rank/marks_needed): treats it as rank 0', () => {
+    const r = applyCommands(emptyDungeon(), [cmd('add', 'player.skills.lockpicking.marks', [1], 'first use')]);
+    expect(r.blocked).toHaveLength(0);
+    expect(skill(r, 'lockpicking')).toEqual({ rank: 0, marks: 1, marks_needed: 3 });
+  });
+});
+
 describe('move with a count (partial take/drop, script-owned conservation)', () => {
   const stocked = () =>
     DungeonSchema.parse({
