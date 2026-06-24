@@ -1,0 +1,175 @@
+[
+  {
+    "id": "undead0_0_0",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 0,
+    "row": 0,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [],
+    "name": "zombie"
+  },
+  {
+    "id": "undead0_4_0",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 4,
+    "row": 0,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [],
+    "name": "zombie"
+  },
+  {
+    "id": "undead0_0_2",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 0,
+    "row": 2,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [
+      "robed"
+    ],
+    "name": "robed lich"
+  },
+  {
+    "id": "undead0_6_2",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 6,
+    "row": 2,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [
+      "robed"
+    ],
+    "name": "crowned lich"
+  },
+  {
+    "id": "undead0_0_4",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 0,
+    "row": 4,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [
+      "spectral"
+    ],
+    "name": "ghost"
+  },
+  {
+    "id": "undead0_3_4",
+    "category": "character",
+    "sheet": "Characters/Undead0.png",
+    "col": 3,
+    "row": 4,
+    "archetype": "undead",
+    "size": "medium",
+    "tags": [
+      "spectral"
+    ],
+    "name": "shadow"
+  },
+  {
+    "id": "rodent0_0_0",
+    "category": "character",
+    "sheet": "Characters/Rodent0.png",
+    "col": 0,
+    "row": 0,
+    "archetype": "vermin",
+    "size": "small",
+    "tags": [
+      "furred"
+    ],
+    "name": "rat"
+  },
+  {
+    "id": "rodent0_4_0",
+    "category": "character",
+    "sheet": "Characters/Rodent0.png",
+    "col": 4,
+    "row": 0,
+    "archetype": "vermin",
+    "size": "small",
+    "tags": [
+      "furred"
+    ],
+    "name": "rat"
+  },
+  {
+    "id": "rodent0_3_0",
+    "category": "character",
+    "sheet": "Characters/Rodent0.png",
+    "col": 3,
+    "row": 0,
+    "archetype": "vermin",
+    "size": "small",
+    "tags": [
+      "icy",
+      "furred"
+    ],
+    "name": "frost rat"
+  },
+  {
+    "id": "slime0_0_0",
+    "category": "character",
+    "sheet": "Characters/Slime0.png",
+    "col": 0,
+    "row": 0,
+    "archetype": "ooze",
+    "size": "medium",
+    "tags": [],
+    "name": "green ooze"
+  },
+  {
+    "id": "slime0_3_0",
+    "category": "character",
+    "sheet": "Characters/Slime0.png",
+    "col": 3,
+    "row": 0,
+    "archetype": "ooze",
+    "size": "medium",
+    "tags": [],
+    "name": "ooze"
+  },
+  {
+    "id": "slime0_4_0",
+    "category": "character",
+    "sheet": "Characters/Slime0.png",
+    "col": 4,
+    "row": 0,
+    "archetype": "ooze",
+    "size": "medium",
+    "tags": [
+      "fiery"
+    ],
+    "name": "magma ooze"
+  },
+  {
+    "id": "slime0_0_3",
+    "category": "character",
+    "sheet": "Characters/Slime0.png",
+    "col": 0,
+    "row": 3,
+    "archetype": "ooze",
+    "size": "small",
+    "tags": [],
+    "name": "slime"
+  },
+  {
+    "id": "slime0_2_3",
+    "category": "character",
+    "sheet": "Characters/Slime0.png",
+    "col": 2,
+    "row": 3,
+    "archetype": "ooze",
+    "size": "small",
+    "tags": [
+      "fiery"
+    ],
+    "name": "fire slime"
+  }
+]
