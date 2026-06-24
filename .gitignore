@@ -5,3 +5,8 @@ dist/
 # Vendored reference copy of Tavern Helper (re-extractable; reference only, not our code)
 JS-Slash-Runner-main/
 JS-Slash-Runner-main.zip
+
+# Vendored DawnLike tileset — bulky binary build-INPUT for the sprite slice-tool
+# (CC-BY-SA, re-downloadable). The committed deliverable is the GENERATED pack module
+# (src/packs/*.ts) + CREDITS, not the raw sheets. See DungeonState-dawnlike-pack-spec.md.
+Sprites/

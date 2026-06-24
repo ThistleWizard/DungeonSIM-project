@@ -104,6 +104,14 @@ export const RoomSchema = z.object({
   exits: z.record(z.string(), ExitSchema).default({}), // keyed by direction
   contents: z.array(ItemSchema).default([]), // floor objects: items, corpses, features, traps
 
+  // Natural, self-sustaining illumination of the room ITSELF — a shaft of daylight, lava glow,
+  // luminous fungus, a perpetual flame on a desecrated altar. A non-empty string DESCRIBES that
+  // source and lights the room with no torch and no fuel cost; '' (default) = an ordinary dark
+  // room. The script's light derivation treats an ambient room as lit (the string becomes the
+  // `Light:` source, with no ticks). Additive + defaulted, so existing saved rooms read back as
+  // ordinary dark rooms.
+  ambient_light: z.string().default(''),
+
   effects: z.array(RoomEffectSchema).default([]),
   visited: z.boolean().default(true),
 });
@@ -112,7 +120,12 @@ export const BestiaryEntrySchema = z.object({
   sprite_fragment: z.string(), // canonical 8-15 word visual, written ONCE
   hp_base: z.number().int().min(1),
   defense: z.number().int().min(1),
-  seed: z.number().int().nullable().default(null), // sprite seed (M7)
+  seed: z.number().int().nullable().default(null), // sprite seed (M7, gen path)
+  // Controlled-vocab descriptors the model emits once per TYPE (M7). The pure resolver scores
+  // these against the sprite pack to choose each mob's sprite. Selection criteria live at the
+  // TYPE level; the resolved sprite locks per-INSTANCE on CombatMobSchema.sprite. Additive +
+  // defaulted: pre-M7 saves read back as `[]` and resolve to a category-generic silhouette.
+  tags: z.array(z.string()).default([]),
 });
 
 export const CombatMobSchema = z.object({
@@ -123,6 +136,12 @@ export const CombatMobSchema = z.object({
   hp_max: z.number().int().min(1),
   status: z.string().default(''), // "bloodied", "prone", ...
   pos: z.enum(['near', 'far']).default('near'),
+  // Per-INSTANCE resolved sprite ref (M7), an opaque scheme-prefixed string the resolver locks
+  // once: 'pack:goblin_01' (a concrete pack sprite) / 'gen:goblin' (gen-fallback, deferred) /
+  // null = not yet resolved. hash(id) ties-break among equally-good pack candidates, so two
+  // same-type mobs can differ yet each stays stable across turns + rewind. The viewport reads
+  // this; it never re-resolves a locked mob. Additive + defaulted (pre-M7 saves read null).
+  sprite: z.string().nullable().default(null),
 });
 
 export const QuestSchema = z.object({
@@ -151,7 +170,9 @@ export const DungeonSchema = z.object({
   light: z
     .object({
       source: z.string(),
-      ticks_remaining: z.number().int().min(0),
+      // ticks of burn left for a consumable source; null = a fuel-less source (ambient room
+      // light), which never counts down.
+      ticks_remaining: z.number().int().min(0).nullable(),
     })
     .nullable()
     .default(null),

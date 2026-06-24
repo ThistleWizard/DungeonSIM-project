@@ -143,6 +143,22 @@ describe('apply path — MESSAGE_RECEIVED', () => {
     expect((h.text.get(1)!.match(/ds-footer/g) ?? []).length).toBe(2);
   });
 
+  it('locks a sprite onto a newly-introduced combat mob, persists it, and snapshots it (M7)', () => {
+    const h = harness(seedHp(10));
+    h.text.set(
+      1,
+      upd(
+        "_.assign('bestiary.goblin', {sprite_fragment:'a goblin', hp_base:5, defense:10, tags:['humanoid']});//new",
+        "_.insert('combat.mobs', {id:'goblin_1', type:'goblin', name:'Goblin', hp_cur:5, hp_max:5});//spawn",
+      ),
+    );
+    const r = h.rt.onMessageReceived(1, 'normal')!;
+    const ref = r.dungeon.combat.mobs[0].sprite;
+    expect(ref).toMatch(/^pack:humanoid/); // resolved from the emitted tags
+    expect(h.dungeon().combat.mobs[0].sprite).toBe(ref); // persisted to chat scope
+    expect(h.tl.readSnapshot(1)!.combat.mobs[0].sprite).toBe(ref); // rewind-safe (snapshotted)
+  });
+
   it('skips out-of-band generation types (quiet/impersonate/continue)', () => {
     const h = midGame();
     h.text.set(2, upd("_.add('player.hp.cur', -4);//should be ignored"));
@@ -209,6 +225,21 @@ describe('rewind — regenerate / swipe / delete', () => {
     h.tl.setLast(1); // message 2 removed
     h.rt.onMessageDeleted(2);
     expect(h.hp()).toBe(10);
+  });
+
+  it('deleting an AI turn whose predecessor is a snapshotless user message still rolls back', () => {
+    // The real-world shape: index 1 AI snapshot, index 2 USER command (no snapshot), index 3 AI turn.
+    const h = midGame(); // AI snapshot at index 1 (hp 10)
+    h.tl.setLast(2); // a user command sits at index 2 with NO snapshot
+    h.text.set(3, upd("_.add('player.hp.cur', -4);//hit"));
+    h.rt.onMessageReceived(3, 'normal');
+    expect(h.hp()).toBe(6);
+    expect(h.tl.readSnapshot(2)).toBeUndefined(); // user message carries no snapshot
+
+    // Delete the AI message (index 3): new tail is the snapshotless user message at index 2.
+    h.tl.setLast(2);
+    h.rt.onMessageDeleted(3);
+    expect(h.hp()).toBe(10); // rolled back PAST the user message to the index-1 baseline
   });
 
   it('a normal forward turn needs no baseline reset', () => {

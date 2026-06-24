@@ -18,6 +18,8 @@ import { renderInventory, renderSheet } from './sheet.js';
 import { type Dungeon } from './schema.js';
 import { readDungeon, type VariableStore } from './store.js';
 import { PALETTE as C, esc, panel, FONT_FAMILY, FONT_IMPORT_CSS } from './style.js';
+import { fillSprites } from './sprites.js';
+import { DEFAULT_PACK, type SpritePack } from './pack.js';
 
 const TABS = [
   { id: 'viewport', label: 'View' },
@@ -58,7 +60,8 @@ function sceneTint(d: Dungeon): { top: string; bottom: string; label: string } {
   const name = (room?.name ?? '').toLowerCase();
   if (/crypt|tomb|grave|bone|drowned/.test(name)) return { top: '#101622', bottom: '#1a2230', label: room?.name ?? '' };
   if (/water|flood|cistern|seep/.test(name)) return { top: '#0a1822', bottom: '#12303a', label: room?.name ?? '' };
-  if (/shrine|altar|reliquary|temple|ash/.test(name)) return { top: '#1a1020', bottom: '#2a1828', label: room?.name ?? '' };
+  if (/shrine|altar|reliquary|temple|ash/.test(name))
+    return { top: '#1a1020', bottom: '#2a1828', label: room?.name ?? '' };
   if (/cavern|cave|mine|tunnel/.test(name)) return { top: '#181410', bottom: '#241c12', label: room?.name ?? '' };
   return { top: '#10101c', bottom: C.stone, label: room?.name ?? 'the dark' };
 }
@@ -97,11 +100,18 @@ export function renderViewport(d: Dungeon): string {
       `background:repeating-linear-gradient(90deg,transparent 0 21px,${C.frameDk}55 21px 22px);` +
       `border-top:1px solid ${C.frameDk}"></div>`;
 
-  // SPRITE SLOT — empty now; M7 fills this with the current mob/scene sprite <img>/<svg>.
+  // SPRITE SLOT — the pure renderer emits the locked sprite REF (read straight from the faced
+  // mob's state); the impure `fillSprites` (sprites.ts, bootstrap-side) turns the ref into an
+  // <img> from the pack, so this renderer never depends on the pack and stays unit-testable.
+  // In darkness, or with nothing faced/resolved, the slot stays empty and shows the placeholder.
+  const spriteRef = !dark && inCombat ? (d.combat!.mobs[0]?.sprite ?? '') : '';
   const spriteLayer =
-    `<div data-sprite-slot style="position:absolute;left:50%;bottom:34%;transform:translateX(-50%);` +
+    `<div data-sprite-slot data-sprite-ref="${esc(spriteRef)}" ` +
+    `style="position:absolute;left:50%;bottom:34%;transform:translateX(-50%);` +
     `display:flex;align-items:flex-end;justify-content:center;min-height:0">` +
-    (dark ? '' : `<div style="color:${C.dim};font-size:10px;padding-bottom:8px">[sprite: M7]</div>`) +
+    (dark || !spriteRef
+      ? `<div style="color:${C.dim};font-size:10px;padding-bottom:8px">${dark ? '' : '[sprite]'}</div>`
+      : '') +
     `</div>`;
 
   const scene =
@@ -171,7 +181,11 @@ function injectStyleOnce(doc: Document, id: string, css: string): void {
  * button) + a `/display` command, and return a `refresh()` for runtime.ts to drive each turn.
  * Returns undefined outside Tavern Helper so importing this is harmless under Vitest.
  */
-export function bootstrapDisplay(store: VariableStore, warn?: (m: string) => void): (() => void) | undefined {
+export function bootstrapDisplay(
+  store: VariableStore,
+  pack: SpritePack = DEFAULT_PACK,
+  warn?: (m: string) => void,
+): (() => void) | undefined {
   const g = globalThis as any;
   const parentDoc: Document | undefined = g.parent?.document;
   const $ = g.$ ?? g.jQuery;
@@ -208,6 +222,9 @@ export function bootstrapDisplay(store: VariableStore, warn?: (m: string) => voi
 
   const render = (): void => {
     $root.html(renderDisplay(readDungeon(store, warn), { activeTab }));
+    // Turn the pure-rendered sprite REF into an <img> from the pack (M7). Targets the slot by
+    // its data attr; rides every refresh/rewind because render() is the refresh.
+    fillSprites($root[0] ?? null, pack);
   };
   const applyVisibility = (): void => {
     $root.attr('hidden', visible ? null : 'hidden');

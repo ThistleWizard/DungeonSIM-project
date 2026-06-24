@@ -163,7 +163,13 @@ the TTRPG depth layer (§13).
   `readDungeon`/`writeDungeon` (namespaced chat-scope restore). Unit-tested incl. the
   no-double-apply regenerate case, and **verified live in SillyTavern**: swipe-forward,
   swipe-back, and delete all restore correct HP — confirming `GENERATION_STARTED` reports the
-  generation type on the target build, so the baseline rollback fires.
+  generation type on the target build, so the baseline rollback fires. A follow-up fix
+  (`37e1a2e`) rolls the baseline back PAST a snapshotless user message on delete, so deleting
+  an AI turn whose predecessor is the player's command no longer leaves that turn's mutations
+  in chat scope; re-running the command sees the pre-turn state. **Re-verified live** (M7
+  session): delete-then-rerun rolls back room/HP/contents cleanly. The M7-session engine work
+  (script-owned corpses + lazy loot on search, ambient room light, stack-quantity
+  conservation) is also **live-verified**.
 - **M1–M5 verified live.** State persists, the §5 invariants hold, drift is gone, and rewind
   is safe in the real app. The every-turn MUD status footer (`Light:`/`Exits:`/`Here:`;
   contents concealed in darkness) is now **script-owned** (`src/footer.ts`, the "option B"
@@ -177,7 +183,7 @@ the TTRPG depth layer (§13).
   rendered from applied state, not hand-computed from the pre-turn `[CURRENT STATE]`). The
   preset's TASK 10 was updated to match (footer instruction removed; `<UpdateDungeon>` marked
   the non-optional final emission, with a malformed-turn guard).
-- **M6 done (automap, see `DungeonState-M6-spec.md`)** — `src/map.ts` (`renderMap`, pure:
+- **M6 done (automap)** — `src/map.ts` (`renderMap`, pure:
   grid-walk layout from the `rooms` graph → 8-bit SVG of the current depth; deterministic +
   stable coordinates, current-room amber highlight, undiscovered-exit `?` stubs,
   vertical/portal markers, `data-room-id`/`<title>` hooks for M8) + exported `computeLayout`
@@ -224,16 +230,31 @@ the TTRPG depth layer (§13).
   `refreshInjection`, and `bootstrap()` registers the panel's `refresh` there — so the panel
   can never disagree with the chat (the §14 M5 dependency, free). Shared `src/style.ts`
   (palette + `panel()` card) keeps all tiles identical; `sheet.ts` refactored onto it.
-- **Next: M7** — sprite system fills the scene window's `data-sprite-slot` hook (added by the restyle). **LIBRARY-first**
-  (reframed with the user; supersedes the earlier generate-and-cache plan). Ladder: **curated
-  tagged sprite pack (primary) → image-gen fallback → text/placeholder**. The model emits tags
-  on a new bestiary type; a PURE resolver matches tags → a concrete sprite (`hash(id)` tie-break
-  for variety) and locks the ref onto the entry. **Pack-agnostic** (decided): the pack is a
-  manifest `{ id: { tags, src } }` of content (base64-inline viable since 8-bit sprites are
-  tiny), outside per-chat state. Ship a CC0/licensed pack as default (Gold Box rips are
-  copyrighted — fine locally, not redistributable). Gen fallback keeps the cache-once design via
-  ST's Image Generation `/sd`. Resolver is pure → unit-testable. See design §15 for the full plan
-  and `DungeonState-M7-spec.md` for the architecture kickoff (seams in place + open questions).
+- **M7 done (sprite system, LIBRARY-first) — built, unit-tested, partially live-verified.**
+  Fills the scene window's `data-sprite-slot` hook (added by the restyle). Ladder: **curated
+  tagged sprite pack (primary) → image-gen fallback (deferred) → text/placeholder**. `src/pack.ts`
+  — the pack FORMAT (`SpriteEntry`/`SpritePack`) + the controlled vocab the model emits
+  (`ARCHETYPES`/`SIZES`/`DESCRIPTORS`) + a self-contained `DEFAULT_PACK` of inline-SVG silhouettes
+  (two tints per archetype + descriptor variants, so per-instance variety is observable). Pack is
+  CONTENT, not engine — swap the module to ship a different pack (`src`s can be data-URI or URL).
+  `src/sprites.ts` — the PURE resolver: `scoreSprite` (archetype ×10 ≫ descriptor ×1, unknown tags
+  contribute 0), `resolveMobSprite` (top-scorers tie-broken by `hashId(mob.id)` FNV-1a → `pack:<id>`
+  ref, else category-generic, else null), `resolveSprites` (idempotent, deep-clones, locks a `sprite`
+  onto each unresolved mob), `spriteRefToSrc` (ref→`src`; `gen:` deferred→null), and the
+  self-guarding DOM filler `fillSprites` (turns a slot's `data-sprite-ref` into an `<img>`; no-ops
+  without a DOM, so importing under Vitest is harmless). **Schema:** additive/defaulted
+  `bestiary.<type>.tags` (selection at the TYPE level) + `combat.mobs[].sprite` (the locked ref,
+  per INSTANCE) — pre-M7 saves read back `[]`/`null`. **Runtime:** `createRuntime` takes a `pack`
+  (default `DEFAULT_PACK`); in the `MESSAGE_RECEIVED` apply path, `resolveSprites` runs *before*
+  snapshot/footer/injection and persists via `writeDungeon`, so the lock is rewind-stable and all
+  reads see the same state. **Display:** the viewport emits the locked ref into `data-sprite-ref`
+  (read straight from the faced mob; empty in darkness / nothing faced); `bootstrapDisplay` takes
+  the pack and calls `fillSprites` after every render → rides every refresh/rewind. **Preset:**
+  bestiary rule 5 now teaches the model to emit `tags:[<descriptors>]` (archetype first) from the
+  full vocabulary with examples. Pack-agnostic + cache-once gen fallback stay as designed (§15).
+  **Live-verified in ST:** silhouettes render per faced mob, same-type mobs get distinct
+  silhouettes (hash variety) that stay stable turn-to-turn, descriptors shift the art, the
+  lock holds across swipes, and darkness / nothing-faced shows an empty viewport. M7 PASSED.
 - **M9 (last, the grail) — "The Cabinet", spec'd in `DungeonState-M9-spec.md`.** A full-screen
   four-quadrant Gold Box shell (Viewport · Map · rehomed ST chat · Character/Inventory + custom
   input) that REPARENTS ST's `#chat` rather than mirroring it. Deliberately last + highest risk:
@@ -286,3 +307,24 @@ Runtime glue (event hooks reading/writing chat-scope vars) builds a `VariableSto
   only flips `lit` and moves the torch. This kills tick-drift and makes snuff/relight and
   lay-down-while-it-keeps-burning work. (Migration: an in-progress save with a lit torch in the
   old `light` block but no `lit` item goes dark next turn — relight it.)
+- **Ambient room light** (additive engine work): `RoomSchema.ambient_light` is a *string* —
+  non-empty DESCRIBES a room's own light (a shaft of daylight, lava glow, a perpetual
+  altar-flame) and lights it with no torch and no fuel cost; `''` (default) = ordinary dark
+  room. `deriveLight` falls back to ambient when nothing is carried/lit, emitting the
+  description as the `light.source` with `ticks_remaining: null` (fuel-less → never counts
+  down; the `light.ticks_remaining` schema field is now nullable, and footer/inject omit the
+  "(N left)" when null). A carried/here lit source still wins over ambient. Set at room
+  creation via `_.assign` only (it's not in the rule-4 mutable-subfields whitelist). The preset
+  seeds R01 with `ambient_light` (starting room always lit + a "your torches are unlit" hint)
+  and lets the model add it to any room it authors. Additive + defaulted ⇒ old saves read dark.
+- **Death drops corpses (script-owned)**: `applyDeaths` (post-apply pass, runs before the light
+  economy) converts any combat mob the model marked `status:'dead'` into a `kind:'corpse'`
+  Item in the player's current room `contents`, then removes it from `combat.mobs`. Idempotent
+  (won't duplicate an existing `<id>_corpse`). Fleeing/despawn stays a plain `_.remove` (no
+  body), so ONLY an explicit death-mark drops a corpse — the "a slain thing leaves a body"
+  bookkeeping no longer depends on the model remembering it (the playtest bug: a killed goblin
+  left no corpse because nothing told the model — or the script — to make one). Loot stays
+  model-driven via **lazy reveal**: the fresh corpse holds nothing; when the player SEARCHES a
+  body the model `_.insert`s what it carried into the room's contents (takeable, shown in
+  `Here:`) — never straight into inventory. Split along the project's line: script owns *the
+  body exists*, model owns *what's on it*. Preset rule 6 + the Death section teach this.

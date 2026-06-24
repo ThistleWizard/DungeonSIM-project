@@ -71,13 +71,14 @@ describe('renderDisplay (M8)', () => {
   });
 });
 
-describe('renderViewport (M8 stand-in until M7 sprites)', () => {
-  it('shows the current room when not in combat, with the M7 sprite slot', () => {
+describe('renderViewport (M7 sprite slot)', () => {
+  it('shows the current room when not in combat, with an empty sprite slot', () => {
     const html = renderViewport(world());
     expect(html).toContain('Entry Hall');
     expect(html).toContain('data-viewport'); // the scene window
-    expect(html).toContain('data-sprite-slot'); // M7 fills this with the sprite
-    expect(html).toContain('[sprite: M7]');
+    expect(html).toContain('data-sprite-slot'); // fillSprites targets this
+    expect(html).toContain('data-sprite-ref=""'); // no mob faced → no ref to fill
+    expect(html).toContain('[sprite]'); // placeholder until a ref is filled
   });
 
   it('shows the faced mob (name + HP) during combat', () => {
@@ -91,6 +92,17 @@ describe('renderViewport (M8 stand-in until M7 sprites)', () => {
     const html = renderViewport(d);
     expect(html).toContain('Drowned Thrall');
     expect(html).toContain('HP 5/12');
+  });
+
+  it('emits the locked mob sprite ref for fillSprites to resolve', () => {
+    const d = DungeonSchema.parse({
+      light: { source: 'Torch', ticks_remaining: 30 },
+      combat: {
+        active: true,
+        mobs: [{ id: 'drowned_01', type: 'drowned', name: 'Drowned', hp_cur: 5, hp_max: 12, sprite: 'pack:undead_01' }],
+      },
+    });
+    expect(renderViewport(d)).toContain('data-sprite-ref="pack:undead_01"');
   });
 
   it('conceals the scene in darkness (no light source)', () => {

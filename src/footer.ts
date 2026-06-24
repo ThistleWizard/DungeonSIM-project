@@ -32,6 +32,10 @@ function prettyType(type: string): string {
  * darkness.
  */
 export function renderFooter(d: Dungeon): string {
+  // The dead get no status footer. A death turn ends with an epitaph + a new-character prompt;
+  // a Light/Exits/Here line for a player who just died (hp 0) reads as incoherent noise.
+  if ((d.player?.hp?.cur ?? 1) <= 0) return '';
+
   const loc = d.player?.location;
   const room = loc ? d.rooms?.[loc] : undefined;
   if (!room) return '';
@@ -39,7 +43,9 @@ export function renderFooter(d: Dungeon): string {
   const lit = !!d.light;
   const lines: string[] = [];
 
-  lines.push(lit ? `Light: ${d.light!.source} (${d.light!.ticks_remaining} left)` : 'Light: none - you stand in darkness');
+  // Ambient room light has no ticks (null) — show just the source, no "(N left)".
+  const tr = d.light?.ticks_remaining;
+  lines.push(lit ? `Light: ${d.light!.source}${tr == null ? '' : ` (${tr} left)`}` : 'Light: none - you stand in darkness');
 
   const exits = Object.entries(room.exits ?? {}).map(([dir, e]) => {
     const state = e.state && e.state !== 'open' ? `, ${e.state}` : '';
