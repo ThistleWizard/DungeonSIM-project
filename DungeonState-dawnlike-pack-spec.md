@@ -1,5 +1,12 @@
 # Spec — DawnLike slice-tool → drop-in M7 sprite pack
 
+> **SUPERSEDED (2026-06-24).** The pipeline was built — see `tools/dawnlike/README.md` for the
+> live workflow. It diverged from this spec on two points: (1) tile **tagging is manual** in
+> `tools/dawnlike/picks.mjs`, not LLM-assisted (an LLM/Haiku pass was considered and deferred —
+> redundant at this scale, where curation already puts a human in the per-tile loop); (2) tags are
+> recorded inline in the pick config rather than a separate pass. The slice approach, sheet→archetype
+> map, `pngjs`, and generated `src/packs/dawnlike.ts` are as described here. Kept for design rationale.
+
 **Status:** spec only (next work item after `m7-sprites` is live-verified). Not built.
 **Goal:** turn the vendored DawnLike tileset into a real M7 sprite pack with **minimal effort and
 zero runtime-model change**, so we can see the real look in-game cheaply — and bail cheaply if we

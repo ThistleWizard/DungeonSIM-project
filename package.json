@@ -6,6 +6,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:script": "node tools/build-script.mjs",
+    "dawnlike:contact": "node tools/dawnlike/contact.mjs",
+    "build:dawnlike": "node tools/dawnlike/build-pack.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -21,6 +23,7 @@
     "@types/lodash": "^4.17.24",
     "@types/node": "^24.0.0",
     "esbuild": "^0.25.0",
+    "pngjs": "^7.0.0",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.6"

@@ -10,3 +10,6 @@ JS-Slash-Runner-main.zip
 # (CC-BY-SA, re-downloadable). The committed deliverable is the GENERATED pack module
 # (src/packs/*.ts) + CREDITS, not the raw sheets. See DungeonState-dawnlike-pack-spec.md.
 Sprites/
+
+# Generated DawnLike contact sheets (selection aid; regenerate with `npm run dawnlike:contact`)
+tools/dawnlike/contact/
