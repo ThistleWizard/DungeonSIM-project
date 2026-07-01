@@ -56,8 +56,13 @@ export interface PanelOptions {
  * Google Fonts (see FONT_IMPORT_CSS / bootstrapDisplay), so it applies even without any ST
  * Custom CSS. Falls back to monospace if the webfont can't load. (For an authentic VGA look
  * you can self-host "Px437 IBM VGA 8x16" and prepend it to this chain.)
+ *
+ * SINGLE quotes on the font name, never double: this string is interpolated into inline
+ * `style="…"` attributes (panel frames), where a double quote TERMINATES the attribute and
+ * silently strips every declaration after it (display:flex, overflow:hidden — the whole
+ * frame). Caught by the M9 mockup; guarded by a cabinet test.
  */
-export const FONT_FAMILY = `"Silkscreen", monospace`;
+export const FONT_FAMILY = `'Silkscreen', monospace`;
 /**
  * Loads the theme webfonts (Silkscreen for the panel/chrome, VT323 for chat prose) into the
  * parent ST document — injected by bootstrapDisplay as the sole content of a dedicated <style>
